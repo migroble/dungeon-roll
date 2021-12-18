@@ -139,6 +139,7 @@ impl Hero {
 #[derive(Debug)]
 struct Game<R: Rng> {
     rng: R,
+    blink: bool,
     delve: u64,
     level: u64,
     hero: Hero,
@@ -154,6 +155,7 @@ impl<R: Rng> Game<R> {
     fn new(rng: R, hero: HeroType) -> Self {
         Self {
             rng,
+            blink: true,
             delve: 0,
             level: 5,
             hero: Hero::new(hero),
@@ -233,7 +235,7 @@ impl<R: Rng> Game<R> {
                 .enumerate()
                 .for_each(|(i, (c, m))| {
                     let style = Style::default();
-                    let style = if i as u64 == self.selection {
+                    let style = if i as u64 == self.selection && self.blink {
                         style.bg(Color::White)
                     } else {
                         style.bg(Color::Black)
@@ -289,7 +291,7 @@ async fn main() -> Result<(), io::Error> {
         game.render(&mut terminal)?;
 
         tokio::select! {
-            _ = sleep(Duration::from_millis(500)) => { game.render(&mut terminal)?; }
+            _ = sleep(Duration::from_millis(500)) => { game.blink = !game.blink; }
             maybe_event = reader.next() => match maybe_event {
                 Some(Ok(event)) => {
                     if event == Event::Key(KeyCode::Right.into()) {
