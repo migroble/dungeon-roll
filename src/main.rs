@@ -5,11 +5,10 @@ use crossterm::{
 use futures::StreamExt;
 use rand::prelude::*;
 use rand_pcg::Pcg64Mcg;
-use std::{collections::HashMap, hash::Hash, io, iter::repeat, time::Duration};
-use tokio::time::sleep;
+use std::{collections::HashMap, hash::Hash, io, iter::repeat};
 use tui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Style},
     terminal::CompletedFrame,
     text::Text,
@@ -48,14 +47,14 @@ enum Monster {
 }
 
 impl Monster {
-    fn render(&self) -> &'static str {
+    fn render(&self) -> Text {
         match self {
-            Monster::Goblin => "G",
-            Monster::Skeleton => "S",
-            Monster::Ooze => "O",
-            Monster::Dragon => "D",
-            Monster::Chest => "C",
-            Monster::Potion => "P",
+            Monster::Goblin => Text::styled("G", Style::default().fg(Color::Green)),
+            Monster::Skeleton => Text::styled("S", Style::default().fg(Color::Gray)),
+            Monster::Ooze => Text::styled("O", Style::default().fg(Color::Blue)),
+            Monster::Dragon => Text::styled("D", Style::default().fg(Color::Red)),
+            Monster::Chest => Text::styled("C", Style::default().fg(Color::Rgb(128, 0, 128))),
+            Monster::Potion => Text::styled("P", Style::default().fg(Color::Rgb(255, 165, 0))),
         }
     }
 }
@@ -146,6 +145,7 @@ struct Game<R: Rng> {
     graveyard: Vec<Ally>,
     pub dungeon: Vec<Monster>,
     treasure: Vec<Treasure>,
+    dragon_lair: u64,
     selection: u64,
 }
 
@@ -160,6 +160,7 @@ impl<R: Rng> Game<R> {
             graveyard: Vec::new(),
             dungeon: Vec::new(),
             treasure: TREASURE.clone(),
+            dragon_lair: 0,
             selection: 0,
         }
     }
@@ -219,21 +220,33 @@ impl<R: Rng> Game<R> {
                 .direction(Direction::Horizontal)
                 .margin(1)
                 .constraints(
-                    repeat(Constraint::Percentage(20))
-                        .take(5)
+                    repeat(Constraint::Ratio(1, self.dungeon.len() as u32))
+                        .take(self.dungeon.len())
                         .collect::<Vec<_>>(),
                 )
                 .split(chunks[1]);
 
-            monster_row.iter().zip(&self.dungeon).for_each(|(c, m)| {
-                f.render_widget(
-                    Paragraph::new(Text::from(m.render()))
-                        // .block(Block::default().borders(Borders::ALL))
-                        .style(Style::default().fg(Color::White).bg(Color::Black))
-                        .alignment(Alignment::Center),
-                    *c,
-                )
-            });
+            monster_row
+                .iter()
+                .zip(&self.dungeon)
+                .enumerate()
+                .for_each(|(i, (c, m))| {
+                    let style = Style::default();
+                    let style = if i as u64 == self.selection {
+                        style.bg(Color::White)
+                    } else {
+                        style.bg(Color::Black)
+                    };
+
+                    let mut sprite = m.render();
+                    sprite.patch_style(style);
+                    f.render_widget(
+                        Paragraph::new(sprite)
+                            .block(Block::default().borders(Borders::ALL))
+                            .alignment(Alignment::Center),
+                        *c,
+                    )
+                });
 
             let paragraph = Paragraph::new(Text::from("\nWelcome to the dungeon!"))
                 .block(Block::default().borders(Borders::ALL))
@@ -276,6 +289,18 @@ async fn main() -> Result<(), io::Error> {
 
         match reader.next().await {
             Some(Ok(event)) => {
+                if event == Event::Key(KeyCode::Right.into()) {
+                    if game.selection < game.dungeon.len() as u64 - 1 {
+                        game.selection += 1;
+                    }
+                }
+
+                if event == Event::Key(KeyCode::Left.into()) {
+                    if game.selection > 0 {
+                        game.selection -= 1;
+                    }
+                }
+
                 if event == Event::Key(KeyCode::Esc.into()) {
                     break;
                 }
