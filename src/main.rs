@@ -5,7 +5,8 @@ use crossterm::{
 use futures::StreamExt;
 use rand::prelude::*;
 use rand_pcg::Pcg64Mcg;
-use std::{collections::HashMap, hash::Hash, io, iter::repeat};
+use std::{collections::HashMap, hash::Hash, io, iter::repeat, time::Duration};
+use tokio::time::sleep;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout},
@@ -287,27 +288,30 @@ async fn main() -> Result<(), io::Error> {
     loop {
         game.render(&mut terminal)?;
 
-        match reader.next().await {
-            Some(Ok(event)) => {
-                if event == Event::Key(KeyCode::Right.into()) {
-                    if game.selection < game.dungeon.len() as u64 - 1 {
-                        game.selection += 1;
+        tokio::select! {
+            _ = sleep(Duration::from_millis(500)) => { game.render(&mut terminal)?; }
+            maybe_event = reader.next() => match maybe_event {
+                Some(Ok(event)) => {
+                    if event == Event::Key(KeyCode::Right.into()) {
+                        if game.selection < game.dungeon.len() as u64 - 1 {
+                            game.selection += 1;
+                        }
+                    }
+
+                    if event == Event::Key(KeyCode::Left.into()) {
+                        if game.selection > 0 {
+                            game.selection -= 1;
+                        }
+                    }
+
+                    if event == Event::Key(KeyCode::Esc.into()) {
+                        break;
                     }
                 }
-
-                if event == Event::Key(KeyCode::Left.into()) {
-                    if game.selection > 0 {
-                        game.selection -= 1;
-                    }
-                }
-
-                if event == Event::Key(KeyCode::Esc.into()) {
-                    break;
-                }
+                Some(Err(e)) => println!("Error: {:?}\r", e),
+                None => break,
             }
-            Some(Err(e)) => println!("Error: {:?}\r", e),
-            None => break,
-        };
+        }
     }
 
     Ok(())
