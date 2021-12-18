@@ -1,6 +1,5 @@
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode},
-    execute,
+    event::{Event, EventStream, KeyCode},
     terminal::enable_raw_mode,
 };
 use futures::StreamExt;
@@ -9,9 +8,10 @@ use rand_pcg::Pcg64Mcg;
 use std::{collections::HashMap, hash::Hash, io, iter::repeat, time::Duration};
 use tokio::time::sleep;
 use tui::{
-    backend::CrosstermBackend,
+    backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
+    terminal::CompletedFrame,
     text::Text,
     widgets::{Block, Borders, Paragraph, Wrap},
     Terminal,
@@ -203,24 +203,11 @@ impl<R: Rng> Game<R> {
             self.dungeon.remove(*i);
         });
     }
-}
 
-#[tokio::main]
-async fn main() -> Result<(), io::Error> {
-    let mut seed: <Pcg64Mcg as SeedableRng>::Seed = Default::default();
-    thread_rng().fill(&mut seed);
-    let rng = Pcg64Mcg::from_seed(seed);
-    let mut game = Game::new(rng, HeroType::Bard);
-    game.next_delve();
-
-    let stdout = io::stdout();
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-    let mut reader = EventStream::new();
-    enable_raw_mode()?;
-
-    terminal.clear()?;
-    loop {
+    fn render<'a, B: Backend>(
+        &self,
+        terminal: &'a mut Terminal<B>,
+    ) -> Result<CompletedFrame<'a>, io::Error> {
         terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -238,7 +225,7 @@ async fn main() -> Result<(), io::Error> {
                 )
                 .split(chunks[1]);
 
-            monster_row.iter().zip(&game.dungeon).for_each(|(c, m)| {
+            monster_row.iter().zip(&self.dungeon).for_each(|(c, m)| {
                 f.render_widget(
                     Paragraph::new(Text::from(m.render()))
                         // .block(Block::default().borders(Borders::ALL))
@@ -265,7 +252,27 @@ async fn main() -> Result<(), io::Error> {
             */
             f.render_widget(paragraph, chunks[0]);
             f.render_widget(Block::default().borders(Borders::ALL), chunks[1]);
-        })?;
+        })
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), io::Error> {
+    let mut seed: <Pcg64Mcg as SeedableRng>::Seed = Default::default();
+    thread_rng().fill(&mut seed);
+    let rng = Pcg64Mcg::from_seed(seed);
+    let mut game = Game::new(rng, HeroType::Bard);
+    game.next_delve();
+
+    let stdout = io::stdout();
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+    let mut reader = EventStream::new();
+    enable_raw_mode()?;
+
+    terminal.clear()?;
+    loop {
+        game.render(&mut terminal)?;
 
         match reader.next().await {
             Some(Ok(event)) => {
