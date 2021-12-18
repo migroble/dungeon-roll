@@ -1,7 +1,7 @@
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode},
+    terminal::enable_raw_mode,
 };
 use futures::StreamExt;
 use rand::prelude::*;
@@ -217,6 +217,7 @@ async fn main() -> Result<(), io::Error> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut reader = EventStream::new();
+    enable_raw_mode()?;
 
     terminal.clear()?;
     loop {
