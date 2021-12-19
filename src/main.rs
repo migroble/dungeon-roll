@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crossterm::{
     event::{Event, EventStream, KeyCode},
     terminal::enable_raw_mode,
