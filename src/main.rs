@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(unused_variables)]
 
 use crossterm::{
     event::{Event, EventStream, KeyCode},
@@ -9,11 +10,12 @@ use rand::prelude::*;
 use rand_pcg::Pcg64Mcg;
 use std::{collections::HashMap, hash::Hash, io, iter::repeat, time::Duration};
 use tokio::time::sleep;
+use tui::layout::Rect;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Style},
-    terminal::CompletedFrame,
+    terminal::{CompletedFrame, Frame},
     text::Text,
     widgets::{Block, Borders, Paragraph, Wrap},
     Terminal,
@@ -34,9 +36,22 @@ enum Ally {
     Fighter,
     Cleric,
     Mage,
-    Thief,
     Champion,
+    Thief,
     Scroll,
+}
+
+impl Ally {
+    fn render(&self) -> Text {
+        match self {
+            Ally::Fighter => Text::styled("F", Style::default().fg(Color::Green)),
+            Ally::Cleric => Text::styled("C", Style::default().fg(Color::Gray)),
+            Ally::Mage => Text::styled("M", Style::default().fg(Color::Blue)),
+            Ally::Champion => Text::styled("C", Style::default().fg(Color::Yellow)),
+            Ally::Thief => Text::styled("T", Style::default().fg(Color::Rgb(128, 0, 128))),
+            Ally::Scroll => Text::styled("S", Style::default().fg(Color::Rgb(255, 165, 0))),
+        }
+    }
 }
 
 #[derive(Debug, Dice, PartialEq, Eq, Hash)]
@@ -138,16 +153,37 @@ impl Hero {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum MonsterPhase {
+    SelectAlly,
+    SelectMonster,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum LootPhase {
+    SelectAlly,
+    SelectLoot,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Phase {
+    Monster(MonsterPhase),
+    Loot(LootPhase),
+    Dragon,
+    Regroup,
+}
+
 #[derive(Debug)]
 struct Game<R: Rng> {
     rng: R,
     blink: bool,
     delve: u64,
     level: u64,
+    phase: Phase,
     hero: Hero,
     party: Vec<Ally>,
     graveyard: Vec<Ally>,
-    pub dungeon: Vec<Monster>,
+    dungeon: Vec<Monster>,
     treasure: Vec<Treasure>,
     dragon_lair: u64,
     selection: u64,
@@ -160,6 +196,7 @@ impl<R: Rng> Game<R> {
             blink: true,
             delve: 0,
             level: 5,
+            phase: Phase::Monster(MonsterPhase::SelectAlly),
             hero: Hero::new(hero),
             party: Vec::new(),
             graveyard: Vec::new(),
@@ -181,7 +218,6 @@ impl<R: Rng> Game<R> {
         self.delve += 1;
         self.party = self.roll(7);
         self.next_level();
-        // println!("{:#?}\n{:#?}", self.party, self.dungeon);
     }
 
     fn next_level(&mut self) {
@@ -210,6 +246,118 @@ impl<R: Rng> Game<R> {
         });
     }
 
+    fn select_next(&mut self) {
+        let limit = match self.phase {
+            Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
+                self.party.len()
+            }
+            Phase::Monster(MonsterPhase::SelectMonster) => self.dungeon.len(),
+            _ => 0,
+        } as u64;
+
+        if self.selection < limit - 1 {
+            self.selection += 1;
+        }
+    }
+
+    fn select_prev(&mut self) {
+        if self.selection > 0 {
+            self.selection -= 1;
+        }
+    }
+
+    fn next_phase(&mut self) {
+        self.phase = match self.phase {
+            Phase::Monster(MonsterPhase::SelectAlly) => Phase::Monster(MonsterPhase::SelectMonster),
+            Phase::Monster(MonsterPhase::SelectMonster) => Phase::Loot(LootPhase::SelectAlly),
+            Phase::Loot(LootPhase::SelectAlly) => Phase::Monster(MonsterPhase::SelectAlly),
+            _ => unreachable!(),
+        };
+        self.selection = 0;
+    }
+
+    fn render_monster_phase<B: Backend>(
+        &self,
+        f: &mut Frame<B>,
+        window: Rect,
+        subphase: &MonsterPhase,
+    ) {
+        let middle = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .split(window);
+
+        let monster_row = Layout::default()
+            .direction(Direction::Horizontal)
+            .margin(1)
+            .constraints(
+                repeat(Constraint::Ratio(1, self.dungeon.len() as u32))
+                    .take(self.dungeon.len())
+                    .collect::<Vec<_>>(),
+            )
+            .split(middle[0]);
+
+        monster_row
+            .iter()
+            .zip(&self.dungeon)
+            .enumerate()
+            .for_each(|(i, (c, m))| {
+                let style = Style::default();
+                let style = if i as u64 == self.selection
+                    && self.blink
+                    && subphase == &MonsterPhase::SelectMonster
+                {
+                    style.bg(Color::White)
+                } else {
+                    style.bg(Color::Black)
+                };
+
+                let mut sprite = m.render();
+                sprite.patch_style(style);
+                f.render_widget(
+                    Paragraph::new(sprite)
+                        .block(Block::default().borders(Borders::ALL))
+                        .alignment(Alignment::Center),
+                    *c,
+                )
+            });
+
+        let party_row = Layout::default()
+            .direction(Direction::Horizontal)
+            .margin(1)
+            .constraints(
+                repeat(Constraint::Ratio(1, self.party.len() as u32))
+                    .take(self.party.len())
+                    .collect::<Vec<_>>(),
+            )
+            .split(middle[1]);
+
+        party_row
+            .iter()
+            .zip(&self.party)
+            .enumerate()
+            .for_each(|(i, (c, p))| {
+                let style = Style::default();
+                let style = if i as u64 == self.selection
+                    && self.blink
+                    && subphase == &MonsterPhase::SelectAlly
+                {
+                    style.bg(Color::White)
+                } else {
+                    style.bg(Color::Black)
+                };
+
+                let mut sprite = p.render();
+                sprite.patch_style(style);
+                f.render_widget(
+                    Paragraph::new(sprite)
+                        .block(Block::default().borders(Borders::ALL))
+                        .alignment(Alignment::Center),
+                    *c,
+                )
+            });
+    }
+
     fn render<'a, B: Backend>(
         &self,
         terminal: &'a mut Terminal<B>,
@@ -221,37 +369,10 @@ impl<R: Rng> Game<R> {
                 .constraints([Constraint::Length(5), Constraint::Percentage(100)].as_ref())
                 .split(f.size());
 
-            let monster_row = Layout::default()
-                .direction(Direction::Horizontal)
-                .margin(1)
-                .constraints(
-                    repeat(Constraint::Ratio(1, self.dungeon.len() as u32))
-                        .take(self.dungeon.len())
-                        .collect::<Vec<_>>(),
-                )
-                .split(chunks[1]);
-
-            monster_row
-                .iter()
-                .zip(&self.dungeon)
-                .enumerate()
-                .for_each(|(i, (c, m))| {
-                    let style = Style::default();
-                    let style = if i as u64 == self.selection && self.blink {
-                        style.bg(Color::White)
-                    } else {
-                        style.bg(Color::Black)
-                    };
-
-                    let mut sprite = m.render();
-                    sprite.patch_style(style);
-                    f.render_widget(
-                        Paragraph::new(sprite)
-                            .block(Block::default().borders(Borders::ALL))
-                            .alignment(Alignment::Center),
-                        *c,
-                    )
-                });
+            match &self.phase {
+                Phase::Monster(sp) => self.render_monster_phase(f, chunks[1], sp),
+                _ => (),
+            }
 
             let paragraph = Paragraph::new(Text::from("\nWelcome to the dungeon!"))
                 .block(Block::default().borders(Borders::ALL))
@@ -296,20 +417,15 @@ async fn main() -> Result<(), io::Error> {
             _ = sleep(Duration::from_millis(500)) => { game.blink = !game.blink; }
             maybe_event = reader.next() => match maybe_event {
                 Some(Ok(event)) => {
-                    if event == Event::Key(KeyCode::Right.into()) {
-                        if game.selection < game.dungeon.len() as u64 - 1 {
-                            game.selection += 1;
-                        }
-                    }
+                    game.blink = true;
 
-                    if event == Event::Key(KeyCode::Left.into()) {
-                        if game.selection > 0 {
-                            game.selection -= 1;
-                        }
-                    }
-
-                    if event == Event::Key(KeyCode::Esc.into()) {
-                        break;
+                    if let Event::Key(kc) = event {
+                            match kc.code {
+                                KeyCode::Right => game.select_next(),
+                                KeyCode::Left => game.select_prev(),
+                                KeyCode::Esc => break,
+                                _ => (),
+                            }
                     }
                 }
                 Some(Err(e)) => println!("Error: {:?}\r", e),
