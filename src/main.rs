@@ -185,8 +185,9 @@ struct Game<R: Rng> {
     graveyard: Vec<Ally>,
     dungeon: Vec<Monster>,
     treasure: Vec<Treasure>,
-    dragon_lair: u64,
-    selection: u64,
+    dragon_lair: usize,
+    selection_ally: usize,
+    selection_monster: usize,
 }
 
 impl<R: Rng> Game<R> {
@@ -203,7 +204,8 @@ impl<R: Rng> Game<R> {
             dungeon: Vec::new(),
             treasure: TREASURE.clone(),
             dragon_lair: 0,
-            selection: 0,
+            selection_ally: 0,
+            selection_monster: 0,
         }
     }
 
@@ -223,6 +225,8 @@ impl<R: Rng> Game<R> {
     fn next_level(&mut self) {
         self.level += 1;
         self.dungeon = self.roll(self.level);
+        self.selection_ally = 0;
+        self.selection_monster = 0;
     }
 
     fn monster_indexes(&self, monster: Monster) -> Vec<usize> {
@@ -247,23 +251,35 @@ impl<R: Rng> Game<R> {
     }
 
     fn select_next(&mut self) {
-        let limit = match self.phase {
+        match self.phase {
             Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
-                self.party.len()
+                if self.selection_ally < self.party.len() - 1 {
+                    self.selection_ally += 1;
+                }
             }
-            Phase::Monster(MonsterPhase::SelectMonster) => self.dungeon.len(),
-            _ => 0,
-        } as u64;
-
-        if self.selection < limit - 1 {
-            self.selection += 1;
-        }
+            Phase::Monster(MonsterPhase::SelectMonster) => {
+                if self.selection_monster < self.dungeon.len() - 1 {
+                    self.selection_monster += 1;
+                }
+            }
+            _ => (),
+        };
     }
 
     fn select_prev(&mut self) {
-        if self.selection > 0 {
-            self.selection -= 1;
-        }
+        match self.phase {
+            Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
+                if self.selection_ally > 0 {
+                    self.selection_ally -= 1;
+                }
+            }
+            Phase::Monster(MonsterPhase::SelectMonster) => {
+                if self.selection_monster > 0 {
+                    self.selection_monster -= 1;
+                }
+            }
+            _ => (),
+        };
     }
 
     fn next_phase(&mut self) {
@@ -273,7 +289,18 @@ impl<R: Rng> Game<R> {
             Phase::Loot(LootPhase::SelectAlly) => Phase::Monster(MonsterPhase::SelectAlly),
             _ => unreachable!(),
         };
-        self.selection = 0;
+
+        self.selection_monster = self.selection_monster.min(self.dungeon.len() - 1);
+        self.selection_ally = self.selection_ally.min(self.party.len() - 1);
+    }
+
+    fn prev_phase(&mut self) {
+        self.phase = match self.phase {
+            Phase::Monster(MonsterPhase::SelectAlly) => Phase::Monster(MonsterPhase::SelectAlly),
+            Phase::Monster(MonsterPhase::SelectMonster) => Phase::Monster(MonsterPhase::SelectAlly),
+            Phase::Loot(LootPhase::SelectAlly) => Phase::Loot(LootPhase::SelectAlly),
+            _ => unreachable!(),
+        };
     }
 
     fn render_monster_phase<B: Backend>(
@@ -303,7 +330,7 @@ impl<R: Rng> Game<R> {
             .enumerate()
             .for_each(|(i, (c, m))| {
                 let style = Style::default();
-                let style = if i as u64 == self.selection
+                let style = if i == self.selection_monster
                     && self.blink
                     && subphase == &MonsterPhase::SelectMonster
                 {
@@ -338,7 +365,7 @@ impl<R: Rng> Game<R> {
             .enumerate()
             .for_each(|(i, (c, p))| {
                 let style = Style::default();
-                let style = if i as u64 == self.selection
+                let style = if i == self.selection_ally
                     && self.blink
                     && subphase == &MonsterPhase::SelectAlly
                 {
@@ -423,7 +450,9 @@ async fn main() -> Result<(), io::Error> {
                             match kc.code {
                                 KeyCode::Right => game.select_next(),
                                 KeyCode::Left => game.select_prev(),
-                                KeyCode::Esc => break,
+                                KeyCode::Enter => game.next_phase(),
+                                KeyCode::Esc => game.prev_phase(),
+                                KeyCode::Char('q') | KeyCode::Char('Q') => break,
                                 _ => (),
                             }
                     }
