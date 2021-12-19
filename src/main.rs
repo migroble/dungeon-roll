@@ -14,7 +14,7 @@ use tui::layout::Rect;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     terminal::{CompletedFrame, Frame},
     text::Text,
     widgets::{Block, Borders, Paragraph, Wrap},
@@ -31,7 +31,7 @@ trait Dice {
     fn faces() -> u64;
 }
 
-#[derive(Debug, Dice, PartialEq, Eq, Hash)]
+#[derive(Debug, Dice, PartialEq)]
 enum Ally {
     Fighter,
     Cleric,
@@ -54,7 +54,7 @@ impl Ally {
     }
 }
 
-#[derive(Debug, Dice, PartialEq, Eq, Hash)]
+#[derive(Debug, Dice, PartialEq, Clone)]
 enum Monster {
     Goblin,
     Skeleton,
@@ -74,6 +74,10 @@ impl Monster {
             Monster::Chest => Text::styled("C", Style::default().fg(Color::Rgb(128, 0, 128))),
             Monster::Potion => Text::styled("P", Style::default().fg(Color::Rgb(255, 165, 0))),
         }
+    }
+
+    fn is_monster(&self) -> bool {
+        matches!(self, Monster::Goblin | Monster::Skeleton | Monster::Ooze)
     }
 }
 
@@ -154,21 +158,22 @@ impl Hero {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum MonsterPhase {
-    SelectAlly,
-    SelectMonster,
+enum MonsterSelect {
+    Ally,
+    Reroll,
+    Monster,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum LootPhase {
-    SelectAlly,
-    SelectLoot,
+enum LootSelect {
+    Ally,
+    Loot,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum Phase {
-    Monster(MonsterPhase),
-    Loot(LootPhase),
+    Monster(MonsterSelect),
+    Loot(LootSelect),
     Dragon,
     Regroup,
 }
@@ -187,6 +192,7 @@ struct Game<R: Rng> {
     treasure: Vec<Treasure>,
     dragon_lair: usize,
     selection_ally: usize,
+    selection_reroll: usize,
     selection_monster: usize,
 }
 
@@ -197,7 +203,7 @@ impl<R: Rng> Game<R> {
             blink: true,
             delve: 0,
             level: 5,
-            phase: Phase::Monster(MonsterPhase::SelectAlly),
+            phase: Phase::Monster(MonsterSelect::Ally),
             hero: Hero::new(hero),
             party: Vec::new(),
             graveyard: Vec::new(),
@@ -205,60 +211,49 @@ impl<R: Rng> Game<R> {
             treasure: TREASURE.clone(),
             dragon_lair: 0,
             selection_ally: 0,
+            selection_reroll: 0,
             selection_monster: 0,
         }
     }
 
-    fn roll<T: Dice + Eq + Hash>(&mut self, count: u64) -> Vec<T> {
-        (0..count)
-            .map(|_| self.rng.gen_range(0..T::faces()))
-            .map(|n| T::nth(n))
-            .collect()
+    fn roll<T: Dice>(&mut self) -> T {
+        T::nth(self.rng.gen_range(0..T::faces()))
+    }
+
+    fn roll_n<T: Dice>(&mut self, n: u64) -> Vec<T> {
+        (0..n).map(|_| self.roll()).collect()
     }
 
     fn next_delve(&mut self) {
         self.delve += 1;
-        self.party = self.roll(7);
+        self.party = self.roll_n(7);
         self.next_level();
     }
 
     fn next_level(&mut self) {
         self.level += 1;
-        self.dungeon = self.roll(self.level);
-        self.selection_ally = 0;
+        self.dungeon = self.roll_n(self.level);
         self.selection_monster = 0;
-    }
-
-    fn monster_indexes(&self, monster: Monster) -> Vec<usize> {
-        self.dungeon
-            .iter()
-            .enumerate()
-            .filter_map(|(n, m)| if m == &monster { Some(n) } else { None })
-            .collect()
-    }
-
-    fn kill(&mut self, monster: Monster) {
-        let indexes = self.monster_indexes(monster);
-        if let Some(i) = indexes.first() {
-            self.dungeon.remove(*i);
-        }
-    }
-
-    fn kill_all(&mut self, monster: Monster) {
-        self.monster_indexes(monster).iter().for_each(|i| {
-            self.dungeon.remove(*i);
-        });
     }
 
     fn select_next(&mut self) {
         match self.phase {
-            Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
+            Phase::Monster(MonsterSelect::Ally) | Phase::Loot(LootSelect::Ally) => {
                 if self.selection_ally < self.party.len() - 1 {
                     self.selection_ally += 1;
                 }
             }
-            Phase::Monster(MonsterPhase::SelectMonster) => {
-                if self.selection_monster < self.dungeon.len() - 1 {
+            Phase::Monster(MonsterSelect::Reroll) => {
+                if self.selection_reroll + 1 == self.selection_ally
+                    && self.selection_reroll + 2 < self.party.len()
+                {
+                    self.selection_reroll += 2;
+                } else if self.selection_reroll + 1 < self.party.len() {
+                    self.selection_reroll += 1;
+                }
+            }
+            Phase::Monster(MonsterSelect::Monster) => {
+                if self.selection_monster + 1 < self.dungeon.len() {
                     self.selection_monster += 1;
                 }
             }
@@ -268,12 +263,20 @@ impl<R: Rng> Game<R> {
 
     fn select_prev(&mut self) {
         match self.phase {
-            Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
+            Phase::Monster(MonsterSelect::Ally) | Phase::Loot(LootSelect::Ally) => {
                 if self.selection_ally > 0 {
                     self.selection_ally -= 1;
                 }
             }
-            Phase::Monster(MonsterPhase::SelectMonster) => {
+            Phase::Monster(MonsterSelect::Reroll) => {
+                if self.selection_reroll - 1 == self.selection_ally && self.selection_reroll - 1 > 0
+                {
+                    self.selection_reroll -= 2;
+                } else if self.selection_reroll > 0 {
+                    self.selection_reroll -= 1;
+                }
+            }
+            Phase::Monster(MonsterSelect::Monster) => {
                 if self.selection_monster > 0 {
                     self.selection_monster -= 1;
                 }
@@ -282,23 +285,80 @@ impl<R: Rng> Game<R> {
         };
     }
 
+    fn has_monsters(&self) -> bool {
+        self.dungeon.iter().any(|m| m.is_monster())
+    }
+
+    fn execute_combat(&mut self) {
+        let kill_all = matches!(
+            (
+                &self.party[self.selection_ally],
+                &self.dungeon[self.selection_monster],
+            ),
+            (&Ally::Fighter, &Monster::Goblin)
+                | (&Ally::Cleric, &Monster::Skeleton)
+                | (&Ally::Mage, &Monster::Ooze)
+                | (&Ally::Champion, _)
+        );
+        if kill_all {
+            let monster = self.dungeon[self.selection_monster].clone();
+            self.dungeon.retain(|m| m != &monster);
+        } else {
+            self.dungeon.remove(self.selection_monster);
+        }
+
+        let ally = self.party.remove(self.selection_ally);
+        self.graveyard.push(ally);
+    }
+
+    fn execute_reroll(&mut self) {
+        self.party[self.selection_reroll] = self.roll();
+        self.party.remove(self.selection_ally);
+    }
+
     fn next_phase(&mut self) {
         self.phase = match self.phase {
-            Phase::Monster(MonsterPhase::SelectAlly) => Phase::Monster(MonsterPhase::SelectMonster),
-            Phase::Monster(MonsterPhase::SelectMonster) => Phase::Loot(LootPhase::SelectAlly),
-            Phase::Loot(LootPhase::SelectAlly) => Phase::Monster(MonsterPhase::SelectAlly),
+            Phase::Monster(MonsterSelect::Ally) => {
+                if self.party[self.selection_ally] == Ally::Scroll {
+                    if self.selection_reroll == self.selection_ally {
+                        if self.selection_ally == 0 {
+                            self.selection_reroll = 1;
+                        } else {
+                            self.selection_reroll -= 1;
+                        }
+                    }
+                    Phase::Monster(MonsterSelect::Reroll)
+                } else {
+                    Phase::Monster(MonsterSelect::Monster)
+                }
+            }
+            Phase::Monster(MonsterSelect::Reroll) => {
+                self.execute_reroll();
+                Phase::Monster(MonsterSelect::Ally)
+            }
+            Phase::Monster(MonsterSelect::Monster) => {
+                self.execute_combat();
+                if self.has_monsters() {
+                    Phase::Monster(MonsterSelect::Ally)
+                } else {
+                    Phase::Loot(LootSelect::Ally)
+                }
+            }
+            Phase::Loot(LootSelect::Ally) => Phase::Monster(MonsterSelect::Ally),
             _ => unreachable!(),
         };
 
         self.selection_monster = self.selection_monster.min(self.dungeon.len() - 1);
         self.selection_ally = self.selection_ally.min(self.party.len() - 1);
+        self.selection_reroll = self.selection_reroll.min(self.party.len() - 1);
     }
 
     fn prev_phase(&mut self) {
         self.phase = match self.phase {
-            Phase::Monster(MonsterPhase::SelectAlly) => Phase::Monster(MonsterPhase::SelectAlly),
-            Phase::Monster(MonsterPhase::SelectMonster) => Phase::Monster(MonsterPhase::SelectAlly),
-            Phase::Loot(LootPhase::SelectAlly) => Phase::Loot(LootPhase::SelectAlly),
+            Phase::Monster(MonsterSelect::Ally) => Phase::Monster(MonsterSelect::Ally),
+            Phase::Monster(MonsterSelect::Reroll) => Phase::Monster(MonsterSelect::Ally),
+            Phase::Monster(MonsterSelect::Monster) => Phase::Monster(MonsterSelect::Ally),
+            Phase::Loot(LootSelect::Ally) => Phase::Loot(LootSelect::Ally),
             _ => unreachable!(),
         };
     }
@@ -307,7 +367,7 @@ impl<R: Rng> Game<R> {
         &self,
         f: &mut Frame<B>,
         window: Rect,
-        subphase: &MonsterPhase,
+        subphase: &MonsterSelect,
     ) {
         let middle = Layout::default()
             .direction(Direction::Vertical)
@@ -332,7 +392,7 @@ impl<R: Rng> Game<R> {
                 let style = Style::default();
                 let style = if i == self.selection_monster
                     && self.blink
-                    && subphase == &MonsterPhase::SelectMonster
+                    && subphase == &MonsterSelect::Monster
                 {
                     style.bg(Color::White)
                 } else {
@@ -365,11 +425,15 @@ impl<R: Rng> Game<R> {
             .enumerate()
             .for_each(|(i, (c, p))| {
                 let style = Style::default();
-                let style = if i == self.selection_ally
-                    && self.blink
-                    && subphase == &MonsterPhase::SelectAlly
+                let style = if (i == self.selection_ally
+                    && (self.blink && subphase == &MonsterSelect::Ally))
+                    || (i == self.selection_reroll
+                        && self.blink
+                        && subphase == &MonsterSelect::Reroll)
                 {
                     style.bg(Color::White)
+                } else if i == self.selection_ally && subphase != &MonsterSelect::Ally {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                 } else {
                     style.bg(Color::Black)
                 };
@@ -396,6 +460,7 @@ impl<R: Rng> Game<R> {
                 .constraints([Constraint::Length(5), Constraint::Percentage(100)].as_ref())
                 .split(f.size());
 
+            #[allow(clippy::single_match)]
             match &self.phase {
                 Phase::Monster(sp) => self.render_monster_phase(f, chunks[1], sp),
                 _ => (),
@@ -451,8 +516,8 @@ async fn main() -> Result<(), io::Error> {
                                 KeyCode::Right => game.select_next(),
                                 KeyCode::Left => game.select_prev(),
                                 KeyCode::Enter => game.next_phase(),
-                                KeyCode::Esc => game.prev_phase(),
-                                KeyCode::Char('q') | KeyCode::Char('Q') => break,
+                                KeyCode::Backspace => game.prev_phase(),
+                                KeyCode::Esc => break,
                                 _ => (),
                             }
                     }
