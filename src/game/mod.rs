@@ -30,7 +30,7 @@ impl<R: Rng> Game<R> {
             blink: true,
             delve: 0,
             level: 5,
-            phase: Phase::Monster(MonsterPhase::SelectAlly),
+            phase: Phase::Setup,
             hero: Hero::new(hero),
             party: Vec::new(),
             graveyard: Vec::new(),

@@ -10,6 +10,7 @@ impl<R: Rng> Game<R> {
         self.delve += 1;
         self.party = roll_n(&mut self.rng, 7);
         self.next_level();
+        self.phase = Phase::Monster(MonsterPhase::SelectAlly);
     }
 
     pub fn select_next(&mut self) {
