@@ -295,11 +295,14 @@ impl<R: Rng> Game<R> {
                 }
             }
             Phase::Monster(MonsterPhase::SelectReroll) => {
-                if self.selection_reroll - 1 == self.selection_ally && self.selection_reroll - 1 > 0
-                {
-                    self.selection_reroll -= 2;
-                } else if self.selection_reroll > 0 {
-                    self.selection_reroll -= 1;
+                if self.selection_reroll > 0 {
+                    if self.selection_reroll - 1 == self.selection_ally
+                        && self.selection_reroll - 1 > 0
+                    {
+                        self.selection_reroll -= 2;
+                    } else {
+                        self.selection_reroll -= 1;
+                    }
                 }
             }
             Phase::Monster(MonsterPhase::SelectMonster) => {
