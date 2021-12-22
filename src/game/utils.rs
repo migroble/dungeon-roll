@@ -1,4 +1,4 @@
-use crate::dice::Dice;
+use crate::{dice::*, game::Game};
 use rand::prelude::*;
 
 pub fn roll<T: Dice, R: Rng>(rng: &mut R) -> T {
@@ -34,4 +34,18 @@ pub fn indexes_of<T: PartialEq>(items: &[T], key: &T) -> Vec<usize> {
         .enumerate()
         .filter_map(|(i, m)| if m == key { Some(i) } else { None })
         .collect()
+}
+
+impl<R: Rng> Game<R> {
+    pub(super) fn current_monster(&self) -> &Monster {
+        &self.dungeon[self.monster_cursor]
+    }
+
+    pub(super) fn current_ally(&self) -> &Ally {
+        &self.party[self.ally_cursor]
+    }
+
+    pub(super) fn current_reroll(&self) -> &Ally {
+        &self.party[self.reroll_cursor]
+    }
 }

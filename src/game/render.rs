@@ -37,9 +37,9 @@ impl<R: Rng> Game<R> {
             )
             .split(middle[0]);
 
-        let equal_monsters = indexes_of(&self.dungeon, &self.dungeon[self.selection_monster]);
+        let equal_monsters = indexes_of(&self.dungeon, &self.current_monster());
         let is_affected = |i: usize| self.affects_all() && equal_monsters.contains(&i);
-        let is_selected = |i: usize| i == self.selection_monster;
+        let is_selected = |i: usize| i == self.monster_cursor;
         monster_row
             .iter()
             .zip(&self.dungeon)
@@ -79,8 +79,8 @@ impl<R: Rng> Game<R> {
             )
             .split(middle[1]);
 
-        let is_selected = |i: usize| i == self.selection_ally;
-        let is_reroll_selected = |i: usize| i == self.selection_reroll;
+        let is_selected = |i: usize| i == self.ally_cursor;
+        let is_reroll_selected = |i: usize| i == self.reroll_cursor;
         party_row
             .iter()
             .zip(&self.party)

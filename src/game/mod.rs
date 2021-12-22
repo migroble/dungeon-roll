@@ -18,9 +18,9 @@ pub struct Game<R: Rng> {
     dungeon: Vec<Monster>,
     treasure: Vec<Treasure>,
     dragon_lair: usize,
-    selection_ally: usize,
-    selection_reroll: usize,
-    selection_monster: usize,
+    ally_cursor: usize,
+    reroll_cursor: usize,
+    monster_cursor: usize,
 }
 
 impl<R: Rng> Game<R> {
@@ -37,9 +37,9 @@ impl<R: Rng> Game<R> {
             dungeon: Vec::new(),
             treasure: TREASURE.clone(),
             dragon_lair: 0,
-            selection_ally: 0,
-            selection_reroll: 0,
-            selection_monster: 0,
+            ally_cursor: 0,
+            reroll_cursor: 0,
+            monster_cursor: 0,
         }
     }
 
