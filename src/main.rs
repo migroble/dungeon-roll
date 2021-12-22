@@ -1,10 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use crossterm::{
-    event::{Event, EventStream, KeyCode},
-    terminal::enable_raw_mode,
-};
+use crossterm::{event::EventStream, terminal::enable_raw_mode};
 use futures::StreamExt;
 use rand::prelude::*;
 use rand_pcg::Pcg64Mcg;
@@ -47,20 +44,7 @@ async fn main() -> Result<(), io::Error> {
         tokio::select! {
             _ = sleep(Duration::from_millis(500)) => game.toggle_blink(),
             maybe_event = reader.next() => match maybe_event {
-                Some(Ok(event)) => {
-                    game.set_blink();
-
-                    if let Event::Key(kc) = event {
-                            match kc.code {
-                                KeyCode::Right => game.select_next(),
-                                KeyCode::Left => game.select_prev(),
-                                KeyCode::Enter => game.next_phase(),
-                                KeyCode::Backspace => game.prev_phase(),
-                                KeyCode::Esc => break,
-                                _ => (),
-                            }
-                    }
-                }
+                Some(Ok(event)) => if game.handle_event(event) {break;},
                 Some(Err(e)) => println!("Error: {:?}\r", e),
                 None => break,
             }
