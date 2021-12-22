@@ -10,6 +10,9 @@ impl<R: Rng> Game<R> {
             Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
                 if self.ally_cursor < self.party.len() - 1 {
                     self.ally_cursor += 1;
+                    if self.ally_cursor == self.reroll_cursor {
+                        self.reroll_cursor -= 1;
+                    }
                 }
             }
             Phase::Monster(MonsterPhase::SelectReroll) => {
@@ -37,6 +40,9 @@ impl<R: Rng> Game<R> {
             Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
                 if self.ally_cursor > 0 {
                     self.ally_cursor -= 1;
+                    if self.ally_cursor == self.reroll_cursor {
+                        self.reroll_cursor += 1;
+                    }
                 }
             }
             Phase::Monster(MonsterPhase::SelectReroll) => {

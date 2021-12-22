@@ -40,8 +40,7 @@ impl<R: Rng> Game<R> {
     }
 
     fn execute_combat(&mut self) {
-        let kill_all = self.affects_all();
-        if kill_all {
+        if self.affects_all() {
             let monster = self.current_monster().clone();
             self.dungeon.retain(|m| m != &monster);
         } else {
@@ -62,13 +61,6 @@ impl<R: Rng> Game<R> {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => {
                     if self.current_ally() == &Ally::Scroll {
-                        if self.reroll_cursor == self.ally_cursor {
-                            if self.ally_cursor == 0 {
-                                self.reroll_cursor = 1;
-                            } else {
-                                self.reroll_cursor -= 1;
-                            }
-                        }
                         Phase::Monster(MonsterPhase::SelectReroll)
                     } else {
                         Phase::Monster(MonsterPhase::SelectMonster)
