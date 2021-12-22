@@ -1,6 +1,7 @@
 use crate::{dice::*, hero::*, phase::*, treasure::*};
 use rand::prelude::*;
 
+mod controls;
 mod gameplay;
 mod render;
 mod utils;
