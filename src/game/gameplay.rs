@@ -82,7 +82,7 @@ impl<R: Rng> Game<R> {
                 }
             },
             Phase::Loot(ref lp) => match lp {
-                LootPhase::SelectAlly => Phase::Monster(MonsterPhase::SelectAlly),
+                LootPhase::SelectAlly => Phase::Loot(LootPhase::SelectLoot),
                 LootPhase::SelectLoot => match self.current_monster() {
                     &Monster::Chest => Phase::Loot(LootPhase::ConfirmLoot),
                     &Monster::Potion => Phase::Loot(LootPhase::SelectGraveyard),
