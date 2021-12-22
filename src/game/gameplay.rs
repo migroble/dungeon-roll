@@ -6,11 +6,10 @@ use crate::{
 use rand::prelude::*;
 
 impl<R: Rng> Game<R> {
-    pub fn next_delve(&mut self) {
+    pub(super) fn next_delve(&mut self) {
         self.delve += 1;
         self.party = roll_n(&mut self.rng, 7);
         self.next_level();
-        self.phase = Phase::Monster(MonsterPhase::SelectAlly);
     }
 
     fn next_level(&mut self) {
@@ -56,7 +55,7 @@ impl<R: Rng> Game<R> {
         self.party.remove(self.ally_cursor);
     }
 
-    pub fn next_phase(&mut self) {
+    pub(super) fn next_phase(&mut self) {
         self.phase = match self.phase {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => {
@@ -110,7 +109,7 @@ impl<R: Rng> Game<R> {
         self.reroll_cursor = self.reroll_cursor.min(self.party.len() - 1);
     }
 
-    pub fn prev_phase(&mut self) {
+    pub(super) fn prev_phase(&mut self) {
         self.phase = match self.phase {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => Phase::Monster(MonsterPhase::SelectAlly),

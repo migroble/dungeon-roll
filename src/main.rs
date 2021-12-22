@@ -29,7 +29,7 @@ async fn main() -> Result<(), io::Error> {
     thread_rng().fill(&mut seed);
     let rng = Pcg64Mcg::from_seed(seed);
     let mut game = Game::new(rng, HeroType::Bard);
-    game.next_delve();
+    game.start();
 
     let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);

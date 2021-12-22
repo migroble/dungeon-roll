@@ -46,6 +46,11 @@ impl<R: Rng> Game<R> {
         }
     }
 
+    pub fn start(&mut self) {
+        self.phase = Phase::Monster(MonsterPhase::SelectAlly);
+        self.next_delve();
+    }
+
     pub fn toggle_blink(&mut self) {
         self.blink = !self.blink;
     }
