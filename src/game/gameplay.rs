@@ -143,7 +143,27 @@ impl<R: Rng> Game<R> {
                     }
                 }
             },
-            Phase::Loot(LootPhase::SelectAlly) => Phase::Monster(MonsterPhase::SelectAlly),
+            Phase::Loot(ref lp) => match lp {
+                LootPhase::SelectAlly => Phase::Monster(MonsterPhase::SelectAlly),
+                LootPhase::SelectLoot => match self.current_monster() {
+                    &Monster::Chest => Phase::Loot(LootPhase::ConfirmLoot),
+                    &Monster::Potion => Phase::Loot(LootPhase::SelectGraveyard),
+                    _ => unreachable!(),
+                },
+                LootPhase::ConfirmLoot => {
+                    self.inventory.push(
+                        self.treasure
+                            .remove(self.rng.gen_range(0..self.treasure.len())),
+                    );
+                    Phase::Dragon
+                }
+                LootPhase::SelectGraveyard => Phase::Loot(LootPhase::ConfirmGraveyard),
+                LootPhase::ConfirmGraveyard => Phase::Dragon,
+            },
+            Phase::Regroup => {
+                self.next_level();
+                Phase::Monster(MonsterPhase::SelectAlly)
+            }
             _ => unreachable!(),
         };
 
@@ -161,7 +181,13 @@ impl<R: Rng> Game<R> {
                 MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::SelectAlly),
                 MonsterPhase::ConfirmCombat => Phase::Monster(MonsterPhase::SelectMonster),
             },
-            Phase::Loot(LootPhase::SelectAlly) => Phase::Loot(LootPhase::SelectAlly),
+            Phase::Loot(ref lp) => match lp {
+                LootPhase::SelectAlly => Phase::Loot(LootPhase::SelectAlly),
+                LootPhase::SelectLoot => Phase::Loot(LootPhase::SelectAlly),
+                LootPhase::ConfirmLoot => Phase::Loot(LootPhase::SelectLoot),
+                LootPhase::SelectGraveyard => Phase::Loot(LootPhase::SelectLoot),
+                LootPhase::ConfirmGraveyard => Phase::Loot(LootPhase::SelectGraveyard),
+            },
             _ => unreachable!(),
         };
     }

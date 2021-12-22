@@ -12,6 +12,8 @@ pub enum LootPhase {
     SelectAlly,
     SelectLoot,
     ConfirmLoot,
+    SelectGraveyard,
+    ConfirmGraveyard,
 }
 
 #[derive(Debug, PartialEq, Eq)]
