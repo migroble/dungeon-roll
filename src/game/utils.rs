@@ -17,6 +17,11 @@ pub fn indexes_of<T: PartialEq>(items: &[T], key: &T) -> Vec<usize> {
         .collect()
 }
 
+pub enum Row {
+    Party,
+    Dungeon,
+}
+
 impl<R: Rng> Game<R> {
     pub(super) fn current_monster(&self) -> &Monster {
         self.dungeon.value(DungeonCursor::Monster as usize)
@@ -28,6 +33,19 @@ impl<R: Rng> Game<R> {
 
     pub(super) fn current_ally_reroll(&self) -> &Ally {
         self.party.value(PartyCursor::Reroll as usize)
+    }
+
+    pub(super) fn selected_row(&self) -> Option<Row> {
+        match self.phase {
+            Phase::Monster(
+                MonsterPhase::SelectMonster | MonsterPhase::SelectReroll(Reroll::Monster),
+            )
+            | Phase::Loot(LootPhase::SelectLoot) => Some(Row::Dungeon),
+            Phase::Monster(MonsterPhase::SelectAlly | MonsterPhase::SelectReroll(Reroll::Ally))
+            | Phase::Loot(LootPhase::SelectAlly)
+            | Phase::Dragon => Some(Row::Party),
+            _ => None,
+        }
     }
 }
 

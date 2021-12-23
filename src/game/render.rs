@@ -10,13 +10,15 @@ use tui::{
     Terminal,
 };
 
-fn vertical_center(area: Rect) -> Rect {
+static DRAGON: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/dragon.txt"));
+
+fn vertical_center(area: Rect, height: u16) -> Rect {
     if area.height > 0 {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
-                Constraint::Length((area.height - 1) / 2),
-                Constraint::Length(1),
+                Constraint::Length(area.height.saturating_sub(height) / 2),
+                Constraint::Length(height),
                 Constraint::Percentage(100),
             ])
             .split(area)[1]
@@ -99,7 +101,7 @@ impl<R: Rng> Game<R> {
                     return ControlFlow::Break(());
                 }
 
-                let r = vertical_center(*cell);
+                let r = vertical_center(*cell, 1);
                 f.render_widget(
                     Paragraph::new(controls[index]).alignment(Alignment::Center),
                     r,
@@ -131,36 +133,31 @@ impl<R: Rng> Game<R> {
             let style = style_fn(self, i);
             let mut sprite = t.render();
             sprite.patch_style(style);
-            let r = vertical_center(*col);
+            let r = vertical_center(*col, 1);
             f.render_widget(Paragraph::new(sprite).alignment(Alignment::Center), r)
         });
     }
 
-    fn render_playfield<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
-        let middle = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)].as_ref())
-            .split(area);
+    fn render_dragon<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
+        let display_area = draw_block(
+            f,
+            Block::default().title(" Dungeon ").borders(Borders::ALL),
+            area,
+        );
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(30), Constraint::Percentage(100)])
+            .split(display_area);
+        let dragon_area = vertical_center(chunks[1], DRAGON.lines().count() as u16);
 
-        let (dungeon_style, party_style) = match &self.phase {
-            Phase::Monster(_) => (
-                monster_phase_style::dungeon_cursor_style,
-                monster_phase_style::party_cursor_style,
-            ),
-            _ => unreachable!(),
-        };
+        f.render_widget(Paragraph::new(DRAGON), dragon_area);
+    }
 
-        let (dungeon_border, party_border) = match self.phase {
-            Phase::Monster(ref mp) => match mp {
-                MonsterPhase::SelectAlly | MonsterPhase::SelectReroll(Reroll::Ally) => {
-                    (BorderType::Plain, BorderType::Thick)
-                }
-                MonsterPhase::SelectMonster | MonsterPhase::SelectReroll(Reroll::Monster) => {
-                    (BorderType::Thick, BorderType::Plain)
-                }
-                _ => (BorderType::Plain, BorderType::Plain),
-            },
-            _ => unreachable!(),
+    fn render_dungeon<B: Backend, S: Styler>(&self, f: &mut Frame<B>, area: Rect) {
+        let dungeon_border = if let Some(Row::Dungeon) = self.selected_row() {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
         };
 
         let dungeon_area = draw_block(
@@ -169,19 +166,43 @@ impl<R: Rng> Game<R> {
                 .title(" Dungeon ")
                 .border_type(dungeon_border)
                 .borders(Borders::ALL),
-            middle[0],
+            area,
         );
+
+        self.render_array(f, dungeon_area, &*self.dungeon, S::dungeon_style);
+    }
+
+    fn render_party<B: Backend, S: Styler>(&self, f: &mut Frame<B>, area: Rect) {
+        let party_border = if let Some(Row::Party) = self.selected_row() {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
+        };
+
         let party_area = draw_block(
             f,
             Block::default()
                 .title(" Party ")
                 .border_type(party_border)
                 .borders(Borders::ALL),
-            middle[1],
+            area,
         );
 
-        self.render_array(f, dungeon_area, &*self.dungeon, dungeon_style);
-        self.render_array(f, party_area, &*self.party, party_style);
+        self.render_array(f, party_area, &*self.party, S::party_style);
+    }
+
+    fn render_playfield<B: Backend, S: Styler>(&self, f: &mut Frame<B>, area: Rect) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)].as_ref())
+            .split(area);
+
+        match self.phase {
+            Phase::Dragon => self.render_dragon(f, chunks[0]),
+            Phase::Regroup => (),
+            _ => self.render_dungeon::<B, S>(f, chunks[0]),
+        }
+        self.render_party::<B, S>(f, chunks[1]);
     }
 
     pub fn render<'a, B: Backend>(
@@ -189,31 +210,41 @@ impl<R: Rng> Game<R> {
         terminal: &'a mut Terminal<B>,
     ) -> Result<CompletedFrame<'a>, io::Error> {
         let size = terminal.size()?;
-
         terminal.draw(|f| {
+            let game = draw_block(f, Block::default().borders(Borders::ALL), f.size());
+
             let layout = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([Constraint::Ratio(3, 4), Constraint::Ratio(1, 4)])
-                .split(f.size());
-
-            let game = draw_block(f, Block::default().borders(Borders::ALL), layout[0]);
+                .split(game);
 
             let sublayout = Layout::default()
                 .direction(Direction::Horizontal)
                 .margin(1)
                 .constraints([
-                    Constraint::Percentage(20),
                     Constraint::Percentage(60),
-                    Constraint::Percentage(20),
+                    Constraint::Percentage(40),
+                    // Constraint::Percentage(20),
                 ])
-                .split(game);
+                .split(layout[0]);
 
-            let info = sublayout[0];
-            let graveyard = sublayout[2];
+            let info = sublayout[1];
+            draw_block(
+                f,
+                Block::default().title(" Info ").borders(Borders::ALL),
+                info,
+            );
 
-            let playfield = sublayout[1];
-            self.render_playfield(f, playfield);
+            // let graveyard = sublayout[2];
+
+            let playfield = sublayout[0];
+            let styler = match &self.phase {
+                Phase::Monster(mp) => self.render_playfield::<_, MPStyler>(f, playfield),
+                Phase::Loot(sp) => self.render_playfield::<_, LPStyler>(f, playfield),
+                Phase::Dragon => self.render_playfield::<_, DPStyler>(f, playfield),
+                _ => unreachable!(),
+            };
 
             let controls = layout[1];
             self.render_controls(f, controls);
@@ -221,10 +252,19 @@ impl<R: Rng> Game<R> {
     }
 }
 
-mod monster_phase_style {
-    use super::*;
+trait Styler {
+    fn dungeon_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+        Style::default()
+    }
 
-    pub fn dungeon_cursor_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+    fn party_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+        Style::default()
+    }
+}
+
+struct MPStyler;
+impl Styler for MPStyler {
+    fn dungeon_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
         let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
         let is_affected = |i: usize| game.affects_all() && equal_monsters.contains(&i);
         let is_selected = |i: usize| i == game.dungeon.cursor(DungeonCursor::Monster as usize);
@@ -260,7 +300,7 @@ mod monster_phase_style {
         }
     }
 
-    pub fn party_cursor_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+    fn party_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
         let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
         let is_selected = |i: usize| i == game.party.cursor(PartyCursor::Ally as usize);
         let is_reroll_selected = |i: usize| i == game.party.cursor(PartyCursor::Reroll as usize);
@@ -287,3 +327,9 @@ mod monster_phase_style {
         }
     }
 }
+
+struct LPStyler;
+impl Styler for LPStyler {}
+
+struct DPStyler;
+impl Styler for DPStyler {}
