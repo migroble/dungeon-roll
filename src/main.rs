@@ -1,7 +1,11 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use crossterm::{event::EventStream, terminal::enable_raw_mode};
+use crossterm::{
+    event::EventStream,
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use futures::StreamExt;
 use rand::prelude::*;
 use rand_pcg::Pcg64Mcg;
@@ -31,11 +35,13 @@ async fn main() -> Result<(), io::Error> {
     let mut game = Game::new(rng, HeroType::Bard);
     game.start();
 
-    let stdout = io::stdout();
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut reader = EventStream::new();
-    enable_raw_mode()?;
 
     terminal.clear()?;
     loop {
@@ -50,6 +56,10 @@ async fn main() -> Result<(), io::Error> {
             }
         }
     }
+
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
 
     Ok(())
 }
