@@ -8,32 +8,6 @@ mod utils;
 
 use utils::*;
 
-pub struct Game<R: Rng> {
-    rng: R,
-    blink: bool,
-    delve: u64,
-    level: u64,
-    phase: Phase,
-    hero: Hero,
-    party: Cursor<Ally>,
-    dungeon: Cursor<Monster>,
-    graveyard: Vec<Ally>,
-    treasure: Vec<Treasure>,
-    inventory: Vec<Treasure>,
-}
-
-#[derive(Copy, Clone)]
-enum PartyCursor {
-    Ally = 0,
-    Reroll = 1,
-}
-
-#[derive(Copy, Clone)]
-enum DungeonCursor {
-    Monster = 0,
-    Reroll = 1,
-}
-
 lazy_static! {
     static ref MON_ALLY_INV: Vec<Invariant<Ally>> = vec![
         |_, _, _| true,                                      // ally cursor
@@ -58,6 +32,32 @@ lazy_static! {
     static ref DRAGON_ALLY_INV: Vec<Invariant<Ally>> = vec![
         |_, _, t| t != &Ally::Scroll, // ally cursor
     ];
+}
+
+#[derive(Copy, Clone)]
+enum PartyCursor {
+    Ally = 0,
+    Reroll = 1,
+}
+
+#[derive(Copy, Clone)]
+enum DungeonCursor {
+    Monster = 0,
+    Reroll = 1,
+}
+
+pub struct Game<R: Rng> {
+    rng: R,
+    blink: bool,
+    delve: u64,
+    level: u64,
+    phase: Phase,
+    hero: Hero,
+    party: Cursor<Ally>,
+    dungeon: Cursor<Monster>,
+    graveyard: Cursor<Ally>,
+    treasure: Vec<Treasure>,
+    inventory: Vec<Treasure>,
 }
 
 impl<R: Rng> Game<R> {

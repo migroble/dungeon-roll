@@ -101,7 +101,7 @@ impl<T> Cursor<T> {
                 } else if !self.invariants[i](self, cursor, self.value(i)) {
                     self.cursors[i] = self
                         .next_valid(i, 0)
-                        .unwrap_or(self.prev_valid(i, self.data.len()).unwrap_or(0));
+                        .unwrap_or_else(|| self.prev_valid(i, self.data.len()).unwrap_or(0));
                 }
             }
         }
