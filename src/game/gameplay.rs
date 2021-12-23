@@ -1,9 +1,4 @@
-use crate::{
-    dice::*,
-    game::{utils::*, Game},
-    phase::*,
-};
-use rand::prelude::*;
+use super::*;
 
 impl<R: Rng> Game<R> {
     pub(super) fn next_delve(&mut self) {
@@ -41,11 +36,11 @@ impl<R: Rng> Game<R> {
             let monster = self.current_monster().clone();
             self.dungeon.retain(|m| m != &monster);
         } else {
-            let idx = self.dungeon.cursor(0);
+            let idx = self.dungeon.cursor(DungeonCursor::Monster as usize);
             self.dungeon.remove(idx);
         }
 
-        let idx = self.party.cursor(0);
+        let idx = self.party.cursor(PartyCursor::Ally as usize);
         let ally = self.party.remove(idx);
         self.graveyard.push(ally);
     }

@@ -1,5 +1,4 @@
-use crate::{dice::*, game::Game};
-use rand::prelude::*;
+use super::*;
 use std::{collections::HashSet, ops::Deref};
 
 pub fn roll<T: Dice, R: Rng>(rng: &mut R) -> T {
@@ -20,15 +19,15 @@ pub fn indexes_of<T: PartialEq>(items: &[T], key: &T) -> Vec<usize> {
 
 impl<R: Rng> Game<R> {
     pub(super) fn current_monster(&self) -> &Monster {
-        self.dungeon.value(0)
+        self.dungeon.value(DungeonCursor::Monster as usize)
     }
 
     pub(super) fn current_ally(&self) -> &Ally {
-        self.party.value(0)
+        self.party.value(PartyCursor::Ally as usize)
     }
 
     pub(super) fn current_ally_reroll(&self) -> &Ally {
-        self.party.value(1)
+        self.party.value(PartyCursor::Reroll as usize)
     }
 }
 

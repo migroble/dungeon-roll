@@ -1,6 +1,5 @@
-use crate::{game::Game, phase::*};
+use super::*;
 use crossterm::event::{Event, KeyCode};
-use rand::prelude::*;
 
 impl<R: Rng> Game<R> {
     pub fn handle_event(&mut self, event: Event) -> bool {
@@ -26,10 +25,14 @@ impl<R: Rng> Game<R> {
     fn select_next(&mut self) {
         match self.phase {
             Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
-                self.party.next(0)
+                self.party.next(PartyCursor::Ally as usize)
             }
-            Phase::Monster(MonsterPhase::SelectReroll) => self.party.next(1),
-            Phase::Monster(MonsterPhase::SelectMonster) => self.dungeon.next(0),
+            Phase::Monster(MonsterPhase::SelectReroll) => {
+                self.party.next(PartyCursor::Reroll as usize)
+            }
+            Phase::Monster(MonsterPhase::SelectMonster) => {
+                self.dungeon.next(DungeonCursor::Monster as usize)
+            }
             _ => (),
         };
     }
@@ -37,19 +40,23 @@ impl<R: Rng> Game<R> {
     fn select_prev(&mut self) {
         match self.phase {
             Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
-                self.party.prev(0)
+                self.party.prev(PartyCursor::Ally as usize)
             }
-            Phase::Monster(MonsterPhase::SelectReroll) => self.party.prev(1),
-            Phase::Monster(MonsterPhase::SelectMonster) => self.dungeon.prev(0),
+            Phase::Monster(MonsterPhase::SelectReroll) => {
+                self.party.prev(PartyCursor::Reroll as usize)
+            }
+            Phase::Monster(MonsterPhase::SelectMonster) => {
+                self.dungeon.prev(DungeonCursor::Monster as usize)
+            }
             _ => (),
         };
     }
 
     fn select(&mut self) {
         let cursor = if self.selection_row == 0 {
-            self.party.cursor(1)
+            self.party.cursor(PartyCursor::Reroll as usize)
         } else {
-            self.dungeon.cursor(1)
+            self.dungeon.cursor(DungeonCursor::Reroll as usize)
         };
 
         let row = &mut self.selection[self.selection_row];

@@ -25,6 +25,18 @@ pub struct Game<R: Rng> {
     selection: [HashSet<usize>; 2],
 }
 
+#[derive(Copy, Clone)]
+enum PartyCursor {
+    Ally = 0,
+    Reroll = 1,
+}
+
+#[derive(Copy, Clone)]
+enum DungeonCursor {
+    Monster = 0,
+    Reroll = 1,
+}
+
 lazy_static! {
     static ref MP_ALLY_INVARIANTS: Vec<Invariant<Ally>> = vec![
         |_, _, _| true,             // ally cursor

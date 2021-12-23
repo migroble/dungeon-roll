@@ -1,8 +1,4 @@
-use crate::{
-    game::{utils::*, Game},
-    phase::*,
-};
-use rand::prelude::*;
+use super::*;
 use std::{io, iter::repeat};
 use tui::layout::Rect;
 use tui::{
@@ -39,7 +35,7 @@ impl<R: Rng> Game<R> {
 
         let equal_monsters = indexes_of(&self.dungeon, self.current_monster());
         let is_affected = |i: usize| self.affects_all() && equal_monsters.contains(&i);
-        let is_selected = |i: usize| i == self.dungeon.cursor(0);
+        let is_selected = |i: usize| i == self.dungeon.cursor(DungeonCursor::Monster as usize);
         monster_row
             .iter()
             .zip(&*self.dungeon)
@@ -82,8 +78,8 @@ impl<R: Rng> Game<R> {
             )
             .split(middle[1]);
 
-        let is_selected = |i: usize| i == self.party.cursor(0);
-        let is_reroll_selected = |i: usize| i == self.party.cursor(1);
+        let is_selected = |i: usize| i == self.party.cursor(PartyCursor::Ally as usize);
+        let is_reroll_selected = |i: usize| i == self.party.cursor(PartyCursor::Reroll as usize);
         party_row
             .iter()
             .zip(&*self.party)
