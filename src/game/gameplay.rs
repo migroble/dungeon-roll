@@ -8,16 +8,16 @@ use rand::prelude::*;
 impl<R: Rng> Game<R> {
     pub(super) fn next_delve(&mut self) {
         self.delve += 1;
-        self.party = roll_n(&mut self.rng, 7);
+        *self.party = roll_n(&mut self.rng, 7);
+        self.party.canonicalize();
         self.next_level();
     }
 
     fn next_level(&mut self) {
         self.level += 1;
-        self.dungeon = roll_n(&mut self.rng, self.level);
-        if let Some(n) = find_first_from(&self.dungeon, 0, |m| m.is_monster()) {
-            self.monster_cursor = n;
-        } else {
+        *self.dungeon = roll_n(&mut self.rng, self.level);
+        self.dungeon.canonicalize();
+        if !self.has_monsters() {
             self.phase = Phase::Loot(LootPhase::SelectAlly)
         }
     }
@@ -43,16 +43,19 @@ impl<R: Rng> Game<R> {
             let monster = self.current_monster().clone();
             self.dungeon.retain(|m| m != &monster);
         } else {
-            self.dungeon.remove(self.monster_cursor);
+            let idx = self.dungeon.cursor(0);
+            self.dungeon.remove(idx);
         }
 
-        let ally = self.party.remove(self.ally_cursor);
+        let idx = self.party.cursor(0);
+        let ally = self.party.remove(idx);
         self.graveyard.push(ally);
     }
 
     fn execute_reroll(&mut self) {
-        self.party[self.reroll_cursor] = roll(&mut self.rng);
-        self.party.remove(self.ally_cursor);
+        // TODO: re-do this
+        // self.party[self.reroll_ally_cursor] = roll(&mut self.rng);
+        // self.party.remove(self.ally_cursor);
     }
 
     pub(super) fn next_phase(&mut self) {
@@ -60,6 +63,7 @@ impl<R: Rng> Game<R> {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => {
                     if self.current_ally() == &Ally::Scroll {
+                        self.party.set_cursor(1);
                         Phase::Monster(MonsterPhase::SelectReroll)
                     } else {
                         Phase::Monster(MonsterPhase::SelectMonster)
@@ -104,16 +108,18 @@ impl<R: Rng> Game<R> {
             _ => unreachable!(),
         };
 
-        self.monster_cursor = self.monster_cursor.min(self.dungeon.len() - 1);
-        self.ally_cursor = self.ally_cursor.min(self.party.len() - 1);
-        self.reroll_cursor = self.reroll_cursor.min(self.party.len() - 1);
+        self.party.canonicalize();
+        self.dungeon.canonicalize();
     }
 
     pub(super) fn prev_phase(&mut self) {
         self.phase = match self.phase {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => Phase::Monster(MonsterPhase::SelectAlly),
-                MonsterPhase::SelectReroll => Phase::Monster(MonsterPhase::SelectAlly),
+                MonsterPhase::SelectReroll => {
+                    self.party.set_cursor(0);
+                    Phase::Monster(MonsterPhase::SelectAlly)
+                }
                 MonsterPhase::ConfirmReroll => Phase::Monster(MonsterPhase::SelectReroll),
                 MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::SelectAlly),
                 MonsterPhase::ConfirmCombat => Phase::Monster(MonsterPhase::SelectMonster),

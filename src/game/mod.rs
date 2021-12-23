@@ -1,12 +1,14 @@
 use crate::{dice::*, hero::*, phase::*, treasure::*};
 use rand::prelude::*;
+use std::collections::HashSet;
 
 mod controls;
 mod gameplay;
 mod render;
 mod utils;
 
-#[derive(Debug)]
+use utils::*;
+
 pub struct Game<R: Rng> {
     rng: R,
     blink: bool,
@@ -14,15 +16,24 @@ pub struct Game<R: Rng> {
     level: u64,
     phase: Phase,
     hero: Hero,
-    party: Vec<Ally>,
+    party: Cursor<Ally>,
+    dungeon: Cursor<Monster>,
     graveyard: Vec<Ally>,
-    dungeon: Vec<Monster>,
     treasure: Vec<Treasure>,
     inventory: Vec<Treasure>,
-    dragon_lair: usize,
-    ally_cursor: usize,
-    reroll_cursor: usize,
-    monster_cursor: usize,
+    selection_row: usize,
+    selection: [HashSet<usize>; 2],
+}
+
+lazy_static! {
+    static ref MP_ALLY_INVARIANTS: Vec<Invariant<Ally>> = vec![
+        |_, _, _| true,             // ally cursor
+        |c, i, t| i != c.cursor(0), // reroll ally cursor
+    ];
+    static ref MP_MONSTER_INVARIANTS: Vec<Invariant<Monster>> = vec![
+        |c, i, t| t.is_monster(),        // monster cursor
+        |c, i, t| t != &Monster::Dragon, // reroll monster cursor
+    ];
 }
 
 impl<R: Rng> Game<R> {
@@ -34,15 +45,13 @@ impl<R: Rng> Game<R> {
             level: 5,
             phase: Phase::Setup,
             hero: Hero::new(hero),
-            party: Vec::new(),
+            party: Cursor::new(Vec::new(), MP_ALLY_INVARIANTS.to_vec()),
             graveyard: Vec::new(),
-            dungeon: Vec::new(),
+            dungeon: Cursor::new(Vec::new(), MP_MONSTER_INVARIANTS.to_vec()),
             treasure: TREASURE.clone(),
             inventory: Vec::new(),
-            dragon_lair: 0,
-            ally_cursor: 0,
-            reroll_cursor: 0,
-            monster_cursor: 0,
+            selection_row: 0,
+            selection: Default::default(),
         }
     }
 

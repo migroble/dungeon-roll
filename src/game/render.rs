@@ -39,10 +39,10 @@ impl<R: Rng> Game<R> {
 
         let equal_monsters = indexes_of(&self.dungeon, &self.current_monster());
         let is_affected = |i: usize| self.affects_all() && equal_monsters.contains(&i);
-        let is_selected = |i: usize| i == self.monster_cursor;
+        let is_selected = |i: usize| i == self.dungeon.cursor(0);
         monster_row
             .iter()
-            .zip(&self.dungeon)
+            .zip(&*self.dungeon)
             .enumerate()
             .for_each(|(i, (c, m))| {
                 let style = Style::default();
@@ -51,6 +51,9 @@ impl<R: Rng> Game<R> {
                         style.bg(Color::White)
                     }
                     MonsterPhase::SelectMonster if !is_selected(i) && is_affected(i) => {
+                        style.bg(Color::DarkGray)
+                    }
+                    MonsterPhase::SelectReroll if self.selection[1].contains(&i) => {
                         style.bg(Color::DarkGray)
                     }
                     MonsterPhase::ConfirmCombat if is_affected(i) => {
@@ -79,11 +82,11 @@ impl<R: Rng> Game<R> {
             )
             .split(middle[1]);
 
-        let is_selected = |i: usize| i == self.ally_cursor;
-        let is_reroll_selected = |i: usize| i == self.reroll_cursor;
+        let is_selected = |i: usize| i == self.party.cursor(0);
+        let is_reroll_selected = |i: usize| i == self.party.cursor(1);
         party_row
             .iter()
-            .zip(&self.party)
+            .zip(&*self.party)
             .enumerate()
             .for_each(|(i, (c, p))| {
                 let style = Style::default();
@@ -93,6 +96,9 @@ impl<R: Rng> Game<R> {
                     }
                     MonsterPhase::SelectReroll if self.blink && is_reroll_selected(i) => {
                         style.bg(Color::White)
+                    }
+                    MonsterPhase::SelectReroll if self.selection[0].contains(&i) => {
+                        style.bg(Color::DarkGray)
                     }
                     MonsterPhase::ConfirmReroll if is_reroll_selected(i) => {
                         style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
