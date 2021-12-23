@@ -68,7 +68,6 @@ impl<R: Rng> Game<R> {
                 controls.append(&mut vec!["Enter: Confirm", "Esc: Back"])
             }
             Phase::Regroup => (),
-            _ => unreachable!(),
         }
         controls.push("Q: Exit");
 

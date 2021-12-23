@@ -44,6 +44,15 @@ impl<R: Rng> Game<R> {
         self.dungeon.clear_selection();
     }
 
+    fn execute_loot(&mut self) {
+        self.inventory.push(
+            self.treasure
+                .remove(self.rng.gen_range(0..self.treasure.len())),
+        );
+    }
+
+    fn execute_graveyard(&mut self) {}
+
     fn end_loot_phase(&mut self) -> Phase {
         if self.has_loot() {
             Phase::Loot(LootPhase::SelectAlly)
@@ -53,11 +62,43 @@ impl<R: Rng> Game<R> {
     }
 
     fn dragon_phase(&mut self) -> Phase {
-        self.party.set_invariants(DRAGON_ALLY_INV.to_vec());
         Phase::Dragon(DragonPhase::SelectAlly)
     }
 
+    fn enter_phase_trigger(&mut self) {
+        match self.phase {
+            Phase::Monster(MonsterPhase::SelectAlly) => {
+                self.party.set_invariants(MON_ALLY_INV.to_vec());
+                self.dungeon.set_invariants(MON_DUNGEON_INV.to_vec());
+            }
+            Phase::Loot(LootPhase::SelectAlly) => self.party.set_invariants(LOOT_ALLY_INV.to_vec()),
+            Phase::Loot(LootPhase::SelectLoot) => {
+                if let Ally::Scroll = self.current_ally() {
+                    self.dungeon
+                        .set_invariants(LOOT_SCROLL_DUNGEON_INV.to_vec());
+                } else {
+                    self.dungeon.set_invariants(LOOT_DUNGEON_INV.to_vec());
+                }
+            }
+            Phase::Dragon(DragonPhase::SelectAlly) => {
+                self.party.set_invariants(DRAGON_ALLY_INV.to_vec())
+            }
+            _ => (),
+        }
+    }
+
+    fn exit_phase_trigger(&mut self) {
+        match self.phase {
+            Phase::Monster(MonsterPhase::ConfirmReroll) => self.execute_reroll(),
+            Phase::Monster(MonsterPhase::ConfirmCombat) => self.execute_combat(),
+            Phase::Loot(LootPhase::ConfirmLoot) => self.execute_loot(),
+            Phase::Loot(LootPhase::ConfirmGraveyard) => self.execute_graveyard(),
+            _ => (),
+        }
+    }
+
     pub(super) fn next_phase(&mut self) {
+        self.exit_phase_trigger();
         self.phase = match self.phase {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => {
@@ -69,17 +110,14 @@ impl<R: Rng> Game<R> {
                 }
                 MonsterPhase::SelectReroll(_) => Phase::Monster(MonsterPhase::ConfirmReroll),
                 MonsterPhase::ConfirmReroll => {
-                    self.execute_reroll();
                     if self.has_monsters() {
                         Phase::Monster(MonsterPhase::SelectAlly)
                     } else {
-                        self.party.set_invariants(LOOT_ALLY_INV.to_vec());
                         Phase::Loot(LootPhase::SelectAlly)
                     }
                 }
                 MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::ConfirmCombat),
                 MonsterPhase::ConfirmCombat => {
-                    self.execute_combat();
                     if self.has_monsters() {
                         Phase::Monster(MonsterPhase::SelectAlly)
                     } else {
@@ -88,38 +126,20 @@ impl<R: Rng> Game<R> {
                 }
             },
             Phase::Loot(ref lp) => match lp {
-                LootPhase::SelectAlly => {
-                    if let Ally::Scroll = self.current_ally() {
-                        self.dungeon
-                            .set_invariants(LOOT_SCROLL_DUNGEON_INV.to_vec());
-                    } else {
-                        self.dungeon.set_invariants(LOOT_DUNGEON_INV.to_vec());
-                    }
-                    Phase::Loot(LootPhase::SelectLoot)
-                }
+                LootPhase::SelectAlly => Phase::Loot(LootPhase::SelectLoot),
                 LootPhase::SelectLoot => match self.current_monster() {
                     Monster::Chest => Phase::Loot(LootPhase::ConfirmLoot),
                     Monster::Potion => Phase::Loot(LootPhase::SelectGraveyard),
                     _ => Phase::Loot(LootPhase::SelectLoot),
                 },
-                LootPhase::ConfirmLoot => {
-                    self.inventory.push(
-                        self.treasure
-                            .remove(self.rng.gen_range(0..self.treasure.len())),
-                    );
-                    self.end_loot_phase()
-                }
+                LootPhase::ConfirmLoot => self.end_loot_phase(),
                 LootPhase::SelectGraveyard => Phase::Loot(LootPhase::ConfirmGraveyard),
                 LootPhase::ConfirmGraveyard => self.end_loot_phase(),
             },
-            Phase::Regroup => {
-                self.next_level();
-                self.dungeon.set_invariants(MON_DUNGEON_INV.to_vec());
-                self.party.set_invariants(MON_ALLY_INV.to_vec());
-                Phase::Monster(MonsterPhase::SelectAlly)
-            }
+            Phase::Regroup => Phase::Monster(MonsterPhase::SelectAlly),
             _ => unreachable!(),
         };
+        self.enter_phase_trigger();
     }
 
     pub(super) fn prev_phase(&mut self) {

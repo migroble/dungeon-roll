@@ -62,24 +62,23 @@ lazy_static! {
 
 impl<R: Rng> Game<R> {
     pub fn new(rng: R, hero: HeroType) -> Self {
-        Self {
+        let mut game = Self {
             rng,
             blink: true,
             delve: 0,
             level: 5,
-            phase: Phase::Setup,
+            phase: Phase::Monster(MonsterPhase::SelectAlly),
             hero: Hero::new(hero),
             party: Cursor::new(Vec::new(), MON_ALLY_INV.to_vec()),
             graveyard: Vec::new(),
             dungeon: Cursor::new(Vec::new(), MON_DUNGEON_INV.to_vec()),
             treasure: TREASURE.clone(),
             inventory: Vec::new(),
-        }
-    }
+        };
 
-    pub fn start(&mut self) {
-        self.phase = Phase::Monster(MonsterPhase::SelectAlly);
-        self.next_delve();
+        game.next_delve();
+
+        game
     }
 
     pub fn toggle_blink(&mut self) {
