@@ -6,7 +6,7 @@ use tui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     terminal::{CompletedFrame, Frame},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
     Terminal,
 };
 
@@ -23,6 +23,12 @@ fn vertical_center(area: Rect) -> Rect {
     } else {
         area
     }
+}
+
+fn draw_block<B: Backend>(f: &mut Frame<B>, block: Block, area: Rect) -> Rect {
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    inner
 }
 
 impl<R: Rng> Game<R> {
@@ -59,10 +65,7 @@ impl<R: Rng> Game<R> {
         }
         controls.push("Q: Exit");
 
-        let block = Block::default().borders(Borders::ALL);
-        let text_area = block.inner(area);
-        f.render_widget(block, area);
-
+        let text_area = draw_block(f, Block::default().borders(Borders::ALL), area);
         let rows = 2;
         let columns = (controls.len() + 1) / 2;
         let column = Layout::default()
@@ -116,8 +119,7 @@ impl<R: Rng> Game<R> {
     ) {
         let row = Layout::default()
             .direction(Direction::Horizontal)
-            .horizontal_margin(1)
-            .vertical_margin(2)
+            .margin(1)
             .constraints(
                 repeat(Constraint::Ratio(1, data.len() as u32))
                     .take(data.len())
@@ -134,92 +136,52 @@ impl<R: Rng> Game<R> {
         });
     }
 
-    fn render_monster_phase<B: Backend>(
-        &self,
-        f: &mut Frame<B>,
-        area: Rect,
-        subphase: &MonsterPhase,
-    ) {
-        f.render_widget(Block::default().borders(Borders::ALL), area);
-
+    fn render_playfield<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
         let middle = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)].as_ref())
             .split(area);
 
-        fn monster_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
-            let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
-            let is_affected = |i: usize| game.affects_all() && equal_monsters.contains(&i);
-            let is_selected = |i: usize| i == game.dungeon.cursor(DungeonCursor::Monster as usize);
-            let is_reroll_selected =
-                |i: usize| i == game.dungeon.cursor(DungeonCursor::Reroll as usize);
+        let (dungeon_style, party_style) = match &self.phase {
+            Phase::Monster(_) => (
+                monster_phase_style::dungeon_cursor_style,
+                monster_phase_style::party_cursor_style,
+            ),
+            _ => unreachable!(),
+        };
 
-            let style = Style::default();
-            match game.phase {
-                Phase::Monster(ref mp) => match mp {
-                    MonsterPhase::SelectMonster if game.blink && is_selected(i) => {
-                        style.bg(Color::White)
-                    }
-                    MonsterPhase::SelectReroll(Reroll::Monster)
-                        if game.blink && is_reroll_selected(i) =>
-                    {
-                        style.bg(Color::White)
-                    }
-                    MonsterPhase::SelectMonster if !is_selected(i) && is_affected(i) => {
-                        style.bg(Color::DarkGray)
-                    }
-                    MonsterPhase::SelectReroll(_) if game.dungeon.is_selected(i) => {
-                        style.bg(Color::DarkGray)
-                    }
-                    MonsterPhase::ConfirmReroll if game.dungeon.is_selected(i) => {
-                        style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
-                    }
-                    MonsterPhase::ConfirmCombat if is_affected(i) => {
-                        style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
-                    }
-                    _ => style.bg(Color::Black),
-                },
-                _ => unreachable!(),
-            }
-        }
+        let (dungeon_border, party_border) = match self.phase {
+            Phase::Monster(ref mp) => match mp {
+                MonsterPhase::SelectAlly | MonsterPhase::SelectReroll(Reroll::Ally) => {
+                    (BorderType::Plain, BorderType::Thick)
+                }
+                MonsterPhase::SelectMonster | MonsterPhase::SelectReroll(Reroll::Monster) => {
+                    (BorderType::Thick, BorderType::Plain)
+                }
+                _ => (BorderType::Plain, BorderType::Plain),
+            },
+            _ => unreachable!(),
+        };
 
-        fn ally_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
-            let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
-            let is_selected = |i: usize| i == game.party.cursor(PartyCursor::Ally as usize);
-            let is_reroll_selected =
-                |i: usize| i == game.party.cursor(PartyCursor::Reroll as usize);
+        let dungeon_area = draw_block(
+            f,
+            Block::default()
+                .title(" Dungeon ")
+                .border_type(dungeon_border)
+                .borders(Borders::ALL),
+            middle[0],
+        );
+        let party_area = draw_block(
+            f,
+            Block::default()
+                .title(" Party ")
+                .border_type(party_border)
+                .borders(Borders::ALL),
+            middle[1],
+        );
 
-            let style = Style::default();
-            match game.phase {
-                Phase::Monster(ref mp) => match mp {
-                    MonsterPhase::SelectAlly if game.blink && is_selected(i) => {
-                        style.bg(Color::White)
-                    }
-                    MonsterPhase::SelectReroll(Reroll::Ally)
-                        if game.blink && is_reroll_selected(i) =>
-                    {
-                        style.bg(Color::White)
-                    }
-                    MonsterPhase::SelectReroll(_) if game.party.is_selected(i) => {
-                        style.bg(Color::DarkGray)
-                    }
-                    MonsterPhase::ConfirmReroll if game.party.is_selected(i) => {
-                        style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
-                    }
-                    _ if mp != &MonsterPhase::SelectAlly && is_selected(i) => {
-                        style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
-                    }
-                    _ => style.bg(Color::Black),
-                },
-                _ => unreachable!(),
-            }
-        }
-
-        f.render_widget(Block::default().borders(Borders::ALL), middle[0]);
-        f.render_widget(Block::default().borders(Borders::ALL), middle[1]);
-
-        self.render_array(f, middle[0], &*self.dungeon, monster_style);
-        self.render_array(f, middle[1], &*self.party, ally_style);
+        self.render_array(f, dungeon_area, &*self.dungeon, dungeon_style);
+        self.render_array(f, party_area, &*self.party, party_style);
     }
 
     pub fn render<'a, B: Backend>(
@@ -235,7 +197,7 @@ impl<R: Rng> Game<R> {
                 .constraints([Constraint::Ratio(3, 4), Constraint::Ratio(1, 4)])
                 .split(f.size());
 
-            f.render_widget(Block::default().borders(Borders::ALL), layout[0]);
+            let game = draw_block(f, Block::default().borders(Borders::ALL), layout[0]);
 
             let sublayout = Layout::default()
                 .direction(Direction::Horizontal)
@@ -245,21 +207,83 @@ impl<R: Rng> Game<R> {
                     Constraint::Percentage(60),
                     Constraint::Percentage(20),
                 ])
-                .split(layout[0]);
+                .split(game);
 
             let info = sublayout[0];
-            let playfield = sublayout[1];
             let graveyard = sublayout[2];
 
+            let playfield = sublayout[1];
+            self.render_playfield(f, playfield);
+
             let controls = layout[1];
-
             self.render_controls(f, controls);
-
-            #[allow(clippy::single_match)]
-            match &self.phase {
-                Phase::Monster(sp) => self.render_monster_phase(f, playfield, sp),
-                _ => (),
-            }
         })
+    }
+}
+
+mod monster_phase_style {
+    use super::*;
+
+    pub fn dungeon_cursor_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+        let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
+        let is_affected = |i: usize| game.affects_all() && equal_monsters.contains(&i);
+        let is_selected = |i: usize| i == game.dungeon.cursor(DungeonCursor::Monster as usize);
+        let is_reroll_selected =
+            |i: usize| i == game.dungeon.cursor(DungeonCursor::Reroll as usize);
+
+        let style = Style::default();
+        match game.phase {
+            Phase::Monster(ref mp) => match mp {
+                MonsterPhase::SelectMonster if game.blink && is_selected(i) => {
+                    style.bg(Color::White)
+                }
+                MonsterPhase::SelectReroll(Reroll::Monster)
+                    if game.blink && is_reroll_selected(i) =>
+                {
+                    style.bg(Color::White)
+                }
+                MonsterPhase::SelectMonster if !is_selected(i) && is_affected(i) => {
+                    style.bg(Color::DarkGray)
+                }
+                MonsterPhase::SelectReroll(_) if game.dungeon.is_selected(i) => {
+                    style.bg(Color::DarkGray)
+                }
+                MonsterPhase::ConfirmReroll if game.dungeon.is_selected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                MonsterPhase::ConfirmCombat if is_affected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                _ => style.bg(Color::Black),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn party_cursor_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+        let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
+        let is_selected = |i: usize| i == game.party.cursor(PartyCursor::Ally as usize);
+        let is_reroll_selected = |i: usize| i == game.party.cursor(PartyCursor::Reroll as usize);
+
+        let style = Style::default();
+        match game.phase {
+            Phase::Monster(ref mp) => match mp {
+                MonsterPhase::SelectAlly if game.blink && is_selected(i) => style.bg(Color::White),
+                MonsterPhase::SelectReroll(Reroll::Ally) if game.blink && is_reroll_selected(i) => {
+                    style.bg(Color::White)
+                }
+                MonsterPhase::SelectReroll(_) if game.party.is_selected(i) => {
+                    style.bg(Color::DarkGray)
+                }
+                MonsterPhase::ConfirmReroll if game.party.is_selected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                _ if mp != &MonsterPhase::SelectAlly && is_selected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                _ => style.bg(Color::Black),
+            },
+            _ => unreachable!(),
+        }
     }
 }
