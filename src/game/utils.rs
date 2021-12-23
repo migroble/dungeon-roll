@@ -54,14 +54,14 @@ impl<T> Cursor<T> {
     }
 
     fn canonicalize(&mut self) {
-        if self.data.len() > 0 {
+        if !self.data.is_empty() {
             for i in 0..self.invariants.len() {
                 let cursor = self.cursor(i);
                 if cursor >= self.data.len() {
                     self.cursors[i] = self
                         .prev_valid(i, self.data.len())
                         .unwrap_or(self.data.len() - 1);
-                } else if !self.invariants[i](&self, cursor, &self.value(i)) {
+                } else if !self.invariants[i](self, cursor, self.value(i)) {
                     self.cursors[i] = self.next_valid(i, 0).unwrap_or(0);
                 }
             }
@@ -74,7 +74,7 @@ impl<T> Cursor<T> {
             .iter()
             .enumerate()
             .skip(skip)
-            .find(|(i, t)| self.invariants[index](&self, *i, t))
+            .find(|(i, t)| self.invariants[index](self, *i, t))
             .map(|(i, _)| i)
     }
 
@@ -85,7 +85,7 @@ impl<T> Cursor<T> {
             .enumerate()
             .rev()
             .skip(self.data.len() - skip)
-            .find(|(i, t)| self.invariants[index](&self, *i, t))
+            .find(|(i, t)| self.invariants[index](self, *i, t))
             .map(|(i, _)| i)
     }
 

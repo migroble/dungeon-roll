@@ -37,7 +37,7 @@ impl<R: Rng> Game<R> {
             )
             .split(middle[0]);
 
-        let equal_monsters = indexes_of(&self.dungeon, &self.current_monster());
+        let equal_monsters = indexes_of(&self.dungeon, self.current_monster());
         let is_affected = |i: usize| self.affects_all() && equal_monsters.contains(&i);
         let is_selected = |i: usize| i == self.dungeon.cursor(0);
         monster_row
