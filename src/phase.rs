@@ -3,7 +3,7 @@ pub enum Phase {
     Setup,
     Monster(MonsterPhase),
     Loot(LootPhase),
-    Dragon,
+    Dragon(DragonPhase),
     Regroup,
 }
 
@@ -29,4 +29,10 @@ pub enum LootPhase {
     ConfirmLoot,
     SelectGraveyard,
     ConfirmGraveyard,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum DragonPhase {
+    SelectAlly,
+    Confirm,
 }

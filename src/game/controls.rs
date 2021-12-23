@@ -18,7 +18,8 @@ impl<R: Rng> Game<R> {
                 }
                 (
                     KeyCode::Char(' '),
-                    Phase::Monster(MonsterPhase::SelectReroll(_)) | Phase::Dragon,
+                    Phase::Monster(MonsterPhase::SelectReroll(_))
+                    | Phase::Dragon(DragonPhase::SelectAlly),
                 ) => self.toggle_select(),
                 _ => return false,
             }
@@ -31,14 +32,14 @@ impl<R: Rng> Game<R> {
 
     fn select_next(&mut self) {
         match self.phase {
-            Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
-                self.party.next(PartyCursor::Ally as usize)
-            }
+            Phase::Monster(MonsterPhase::SelectAlly)
+            | Phase::Loot(LootPhase::SelectAlly)
+            | Phase::Dragon(DragonPhase::SelectAlly) => self.party.next(PartyCursor::Ally as usize),
             Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally)) => {
                 self.party.next(PartyCursor::Reroll as usize)
             }
 
-            Phase::Monster(MonsterPhase::SelectMonster) => {
+            Phase::Monster(MonsterPhase::SelectMonster) | Phase::Loot(LootPhase::SelectLoot) => {
                 self.dungeon.next(DungeonCursor::Monster as usize)
             }
             Phase::Monster(MonsterPhase::SelectReroll(Reroll::Monster)) => {
@@ -50,13 +51,13 @@ impl<R: Rng> Game<R> {
 
     fn select_prev(&mut self) {
         match self.phase {
-            Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
-                self.party.prev(PartyCursor::Ally as usize)
-            }
+            Phase::Monster(MonsterPhase::SelectAlly)
+            | Phase::Loot(LootPhase::SelectAlly)
+            | Phase::Dragon(DragonPhase::SelectAlly) => self.party.prev(PartyCursor::Ally as usize),
             Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally)) => {
                 self.party.prev(PartyCursor::Reroll as usize)
             }
-            Phase::Monster(MonsterPhase::SelectMonster) => {
+            Phase::Monster(MonsterPhase::SelectMonster) | Phase::Loot(LootPhase::SelectLoot) => {
                 self.dungeon.prev(DungeonCursor::Monster as usize)
             }
             Phase::Monster(MonsterPhase::SelectReroll(Reroll::Monster)) => {
@@ -67,11 +68,15 @@ impl<R: Rng> Game<R> {
     }
 
     fn toggle_select(&mut self) {
-        if let Phase::Monster(MonsterPhase::SelectReroll(r)) = &self.phase {
-            match r {
+        match self.phase {
+            Phase::Monster(MonsterPhase::SelectReroll(ref r)) => match r {
                 Reroll::Monster => self.dungeon.toggle_select(DungeonCursor::Reroll as usize),
                 Reroll::Ally => self.party.toggle_select(PartyCursor::Reroll as usize),
+            },
+            Phase::Dragon(DragonPhase::SelectAlly) => {
+                self.party.toggle_select(PartyCursor::Ally as usize)
             }
+            _ => (),
         }
     }
 

@@ -39,9 +39,31 @@ impl<R: Rng> Game<R> {
             | Phase::Loot(LootPhase::SelectLoot) => Some(Row::Dungeon),
             Phase::Monster(MonsterPhase::SelectAlly | MonsterPhase::SelectReroll(Reroll::Ally))
             | Phase::Loot(LootPhase::SelectAlly)
-            | Phase::Dragon => Some(Row::Party),
+            | Phase::Dragon(DragonPhase::SelectAlly) => Some(Row::Party),
             _ => None,
         }
+    }
+
+    pub(super) fn has_monsters(&self) -> bool {
+        self.dungeon.iter().any(|m| m.is_monster())
+    }
+
+    pub(super) fn has_loot(&self) -> bool {
+        self.dungeon
+            .iter()
+            .any(|m| !m.is_monster() && m != &Monster::Dragon)
+    }
+
+    pub(super) fn affects_all(&self) -> bool {
+        matches!(
+            (self.current_ally(), self.current_monster()),
+            (Ally::Fighter, Monster::Goblin)
+                | (Ally::Cleric, Monster::Skeleton)
+                | (Ally::Mage, Monster::Ooze)
+                | (Ally::Champion, _)
+                | (Ally::Thief, Monster::Chest)
+                | (_, Monster::Potion)
+        )
     }
 }
 

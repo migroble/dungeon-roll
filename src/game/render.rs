@@ -61,7 +61,12 @@ impl<R: Rng> Game<R> {
                     _ => "Esc: Back",
                 },
             ]),
-            Phase::Dragon => controls.append(&mut vec!["Space: Select", "Enter: Confirm"]),
+            Phase::Dragon(DragonPhase::SelectAlly) => {
+                controls.append(&mut vec!["Space: Select", "Enter: Confirm"])
+            }
+            Phase::Dragon(DragonPhase::Confirm) => {
+                controls.append(&mut vec!["Enter: Confirm", "Esc: Back"])
+            }
             Phase::Regroup => (),
             _ => unreachable!(),
         }
@@ -198,7 +203,7 @@ impl<R: Rng> Game<R> {
             .split(area);
 
         match self.phase {
-            Phase::Dragon => self.render_dragon(f, chunks[0]),
+            Phase::Dragon(_) => self.render_dragon(f, chunks[0]),
             Phase::Regroup => (),
             _ => self.render_dungeon::<B, S>(f, chunks[0]),
         }
@@ -241,7 +246,7 @@ impl<R: Rng> Game<R> {
             match &self.phase {
                 Phase::Monster(_) => self.render_playfield::<_, MPStyler>(f, playfield),
                 Phase::Loot(_) => self.render_playfield::<_, LPStyler>(f, playfield),
-                Phase::Dragon => self.render_playfield::<_, DPStyler>(f, playfield),
+                Phase::Dragon(_) => self.render_playfield::<_, DPStyler>(f, playfield),
                 _ => unreachable!(),
             };
 
@@ -265,8 +270,9 @@ struct MPStyler;
 impl Styler for MPStyler {
     fn dungeon_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
         let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
-        let is_affected = |i: usize| game.affects_all() && equal_monsters.contains(&i);
         let is_selected = |i: usize| i == game.dungeon.cursor(DungeonCursor::Monster as usize);
+        let is_affected =
+            |i: usize| game.affects_all() && equal_monsters.contains(&i) || is_selected(i);
         let is_reroll_selected =
             |i: usize| i == game.dungeon.cursor(DungeonCursor::Reroll as usize);
 
@@ -330,8 +336,9 @@ struct LPStyler;
 impl Styler for LPStyler {
     fn dungeon_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
         let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
-        let is_affected = |i: usize| game.affects_all() && equal_monsters.contains(&i);
         let is_selected = |i: usize| i == game.dungeon.cursor(DungeonCursor::Monster as usize);
+        let is_affected =
+            |i: usize| game.affects_all() && equal_monsters.contains(&i) || is_selected(i);
 
         let style = Style::default();
         match game.phase {
@@ -367,4 +374,21 @@ impl Styler for LPStyler {
 }
 
 struct DPStyler;
-impl Styler for DPStyler {}
+impl Styler for DPStyler {
+    fn party_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+        let is_selected = |i: usize| i == game.party.cursor(PartyCursor::Ally as usize);
+
+        let style = Style::default();
+        match game.phase {
+            Phase::Dragon(ref dp) => match dp {
+                DragonPhase::SelectAlly if game.blink && is_selected(i) => style.bg(Color::White),
+                DragonPhase::SelectAlly if game.party.is_selected(i) => style.bg(Color::DarkGray),
+                DragonPhase::Confirm if game.party.is_selected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                _ => style.bg(Color::Black),
+            },
+            _ => unreachable!(),
+        }
+    }
+}

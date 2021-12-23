@@ -16,22 +16,6 @@ impl<R: Rng> Game<R> {
         }
     }
 
-    fn has_monsters(&self) -> bool {
-        self.dungeon.iter().any(|m| m.is_monster())
-    }
-
-    pub(super) fn affects_all(&self) -> bool {
-        matches!(
-            (self.current_ally(), self.current_monster()),
-            (Ally::Fighter, Monster::Goblin)
-                | (Ally::Cleric, Monster::Skeleton)
-                | (Ally::Mage, Monster::Ooze)
-                | (Ally::Champion, _)
-                | (Ally::Thief, Monster::Chest)
-                | (_, Monster::Potion)
-        )
-    }
-
     fn execute_combat(&mut self) {
         if self.affects_all() {
             let monster = self.current_monster().clone();
@@ -58,6 +42,19 @@ impl<R: Rng> Game<R> {
             .iter()
             .for_each(|s| self.dungeon.set_value(*s, roll(&mut self.rng)));
         self.dungeon.clear_selection();
+    }
+
+    fn end_loot_phase(&mut self) -> Phase {
+        if self.has_loot() {
+            Phase::Loot(LootPhase::SelectAlly)
+        } else {
+            self.dragon_phase()
+        }
+    }
+
+    fn dragon_phase(&mut self) -> Phase {
+        self.party.set_invariants(DRAGON_ALLY_INV.to_vec());
+        Phase::Dragon(DragonPhase::SelectAlly)
     }
 
     pub(super) fn next_phase(&mut self) {
@@ -103,17 +100,17 @@ impl<R: Rng> Game<R> {
                 LootPhase::SelectLoot => match self.current_monster() {
                     Monster::Chest => Phase::Loot(LootPhase::ConfirmLoot),
                     Monster::Potion => Phase::Loot(LootPhase::SelectGraveyard),
-                    _ => unreachable!(),
+                    _ => Phase::Loot(LootPhase::SelectLoot),
                 },
                 LootPhase::ConfirmLoot => {
                     self.inventory.push(
                         self.treasure
                             .remove(self.rng.gen_range(0..self.treasure.len())),
                     );
-                    Phase::Dragon
+                    self.end_loot_phase()
                 }
                 LootPhase::SelectGraveyard => Phase::Loot(LootPhase::ConfirmGraveyard),
-                LootPhase::ConfirmGraveyard => Phase::Dragon,
+                LootPhase::ConfirmGraveyard => self.end_loot_phase(),
             },
             Phase::Regroup => {
                 self.next_level();
@@ -137,13 +134,13 @@ impl<R: Rng> Game<R> {
                 MonsterPhase::ConfirmCombat => Phase::Monster(MonsterPhase::SelectMonster),
             },
             Phase::Loot(ref lp) => match lp {
-                LootPhase::SelectAlly => Phase::Dragon,
+                LootPhase::SelectAlly => self.dragon_phase(),
                 LootPhase::SelectLoot => Phase::Loot(LootPhase::SelectAlly),
                 LootPhase::ConfirmLoot => Phase::Loot(LootPhase::SelectLoot),
                 LootPhase::SelectGraveyard => Phase::Loot(LootPhase::SelectLoot),
                 LootPhase::ConfirmGraveyard => Phase::Loot(LootPhase::SelectGraveyard),
             },
-            Phase::Dragon => Phase::Dragon,
+            Phase::Dragon(_) => Phase::Dragon(DragonPhase::SelectAlly),
             _ => unreachable!(),
         };
     }
