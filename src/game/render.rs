@@ -1,5 +1,5 @@
 use super::*;
-use std::{io, iter::repeat};
+use std::{io, iter::repeat, ops::ControlFlow};
 use tui::layout::Rect;
 use tui::{
     backend::Backend,
@@ -10,7 +10,103 @@ use tui::{
     Terminal,
 };
 
+fn vertical_center(area: Rect) -> Rect {
+    if area.height > 0 {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![
+                Constraint::Length((area.height - 1) / 2),
+                Constraint::Length(1),
+                Constraint::Percentage(100),
+            ])
+            .split(area)[1]
+    } else {
+        area
+    }
+}
+
 impl<R: Rng> Game<R> {
+    fn render_controls<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
+        let mut controls = vec!["→: Next", "←: Previous"];
+        match self.phase {
+            Phase::Monster(ref mp) => match mp {
+                MonsterPhase::SelectReroll(Reroll::Ally) => controls.append(&mut vec![
+                    "↑: Dungeon row",
+                    "Space: Select",
+                    "Enter: Confirm",
+                    "Esc: Back",
+                ]),
+                MonsterPhase::ConfirmCombat => controls = vec!["Enter: Confirm", "Esc: Back"],
+                MonsterPhase::SelectReroll(Reroll::Monster) => controls.append(&mut vec![
+                    "↓: Party row",
+                    "Space: Select",
+                    "Enter: Confirm",
+                    "Esc: Back",
+                ]),
+                MonsterPhase::ConfirmReroll => controls = vec!["Enter: Confirm", "Esc: Back"],
+                _ => controls.append(&mut vec!["Enter: Select", "Esc: Back"]),
+            },
+            Phase::Loot(ref lp) => controls.append(&mut vec![
+                "Enter: Confirm",
+                match lp {
+                    LootPhase::SelectAlly => "Esc: Skip loot",
+                    _ => "Esc: Back",
+                },
+            ]),
+            Phase::Dragon => controls.append(&mut vec!["Space: Select", "Enter: Confirm"]),
+            Phase::Regroup => (),
+            _ => unreachable!(),
+        }
+        controls.push("Q: Exit");
+
+        let block = Block::default().borders(Borders::ALL);
+        let text_area = block.inner(area);
+        f.render_widget(block, area);
+
+        let rows = 2;
+        let columns = (controls.len() + 1) / 2;
+        let column = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(
+                repeat(Constraint::Ratio(1, rows as u32))
+                    .take(rows)
+                    .collect::<Vec<_>>(),
+            )
+            .split(text_area);
+
+        column.iter().enumerate().for_each(|(i, col)| {
+            let ratio = if i == rows - 1 {
+                controls.len() - i * columns
+            } else {
+                columns
+            };
+
+            let row = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(
+                    repeat(Constraint::Ratio(1, ratio as u32))
+                        .take(columns)
+                        .collect::<Vec<_>>(),
+                )
+                .split(*col);
+
+            row.iter().enumerate().try_for_each(|(j, cell)| {
+                let index = i * columns + j;
+                if index >= controls.len() {
+                    return ControlFlow::Break(());
+                }
+
+                let r = vertical_center(*cell);
+                f.render_widget(
+                    Paragraph::new(controls[index]).alignment(Alignment::Center),
+                    r,
+                );
+
+                ControlFlow::Continue(())
+            });
+        })
+    }
+
     fn render_array<B: Backend, T: Render>(
         &self,
         f: &mut Frame<B>,
@@ -29,11 +125,12 @@ impl<R: Rng> Game<R> {
             )
             .split(area);
 
-        row.iter().zip(data).enumerate().for_each(|(i, (c, t))| {
+        row.iter().zip(data).enumerate().for_each(|(i, (col, t))| {
             let style = style_fn(self, i);
             let mut sprite = t.render();
             sprite.patch_style(style);
-            f.render_widget(Paragraph::new(sprite).alignment(Alignment::Center), *c)
+            let r = vertical_center(*col);
+            f.render_widget(Paragraph::new(sprite).alignment(Alignment::Center), r)
         });
     }
 
@@ -134,10 +231,12 @@ impl<R: Rng> Game<R> {
         terminal.draw(|f| {
             let layout = Layout::default()
                 .direction(Direction::Vertical)
-                .horizontal_margin(1)
-                .vertical_margin(size.height.checked_sub(24).unwrap_or(0) / 2)
-                .constraints([Constraint::Length(12), Constraint::Length(9)])
+                .margin(1)
+                .constraints([Constraint::Ratio(3, 4), Constraint::Ratio(1, 4)])
                 .split(f.size());
+
+            f.render_widget(Block::default().borders(Borders::ALL), layout[0]);
+
             let sublayout = Layout::default()
                 .direction(Direction::Horizontal)
                 .margin(1)
@@ -154,14 +253,7 @@ impl<R: Rng> Game<R> {
 
             let controls = layout[1];
 
-            f.render_widget(
-                Block::default().title("layout 0").borders(Borders::ALL),
-                layout[0],
-            );
-            f.render_widget(
-                Block::default().title("controls").borders(Borders::ALL),
-                controls,
-            );
+            self.render_controls(f, controls);
 
             #[allow(clippy::single_match)]
             match &self.phase {
