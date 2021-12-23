@@ -75,6 +75,7 @@ impl<R: Rng> Game<R> {
                     if self.has_monsters() {
                         Phase::Monster(MonsterPhase::SelectAlly)
                     } else {
+                        self.party.set_invariants(LOOT_ALLY_INV.to_vec());
                         Phase::Loot(LootPhase::SelectAlly)
                     }
                 }
@@ -89,7 +90,15 @@ impl<R: Rng> Game<R> {
                 }
             },
             Phase::Loot(ref lp) => match lp {
-                LootPhase::SelectAlly => Phase::Loot(LootPhase::SelectLoot),
+                LootPhase::SelectAlly => {
+                    if let Ally::Scroll = self.current_ally() {
+                        self.dungeon
+                            .set_invariants(LOOT_SCROLL_DUNGEON_INV.to_vec());
+                    } else {
+                        self.dungeon.set_invariants(LOOT_DUNGEON_INV.to_vec());
+                    }
+                    Phase::Loot(LootPhase::SelectLoot)
+                }
                 LootPhase::SelectLoot => match self.current_monster() {
                     Monster::Chest => Phase::Loot(LootPhase::ConfirmLoot),
                     Monster::Potion => Phase::Loot(LootPhase::SelectGraveyard),
@@ -125,12 +134,13 @@ impl<R: Rng> Game<R> {
                 MonsterPhase::ConfirmCombat => Phase::Monster(MonsterPhase::SelectMonster),
             },
             Phase::Loot(ref lp) => match lp {
-                LootPhase::SelectAlly => Phase::Loot(LootPhase::SelectAlly),
+                LootPhase::SelectAlly => Phase::Dragon,
                 LootPhase::SelectLoot => Phase::Loot(LootPhase::SelectAlly),
                 LootPhase::ConfirmLoot => Phase::Loot(LootPhase::SelectLoot),
                 LootPhase::SelectGraveyard => Phase::Loot(LootPhase::SelectLoot),
                 LootPhase::ConfirmGraveyard => Phase::Loot(LootPhase::SelectGraveyard),
             },
+            Phase::Dragon => Phase::Dragon,
             _ => unreachable!(),
         };
     }

@@ -35,13 +35,25 @@ enum DungeonCursor {
 }
 
 lazy_static! {
-    static ref MP_ALLY_INVARIANTS: Vec<Invariant<Ally>> = vec![
+    static ref MON_ALLY_INV: Vec<Invariant<Ally>> = vec![
         |_, _, _| true,                                      // ally cursor
         |c, i, _| i != c.cursor(PartyCursor::Ally as usize), // reroll ally cursor
     ];
-    static ref MP_MONSTER_INVARIANTS: Vec<Invariant<Monster>> = vec![
+    static ref MON_DUNGEON_INV: Vec<Invariant<Monster>> = vec![
         |_, _, t| t.is_monster(),        // monster cursor
         |_, _, t| t != &Monster::Dragon, // reroll monster cursor
+    ];
+
+    static ref LOOT_ALLY_INV: Vec<Invariant<Ally>> = vec![
+        |_, _, _| true,                                      // ally cursor
+        |c, i, _| i != c.cursor(PartyCursor::Ally as usize), // reroll ally cursor
+    ];
+    static ref LOOT_DUNGEON_INV: Vec<Invariant<Monster>> = vec![
+        |_, _, t| t != &Monster::Dragon,
+    ];
+    // scrolls cant open chests
+    static ref LOOT_SCROLL_DUNGEON_INV: Vec<Invariant<Monster>> = vec![
+        |_, _, t| t != &Monster::Chest && t != &Monster::Dragon,
     ];
 }
 
@@ -54,9 +66,9 @@ impl<R: Rng> Game<R> {
             level: 5,
             phase: Phase::Setup,
             hero: Hero::new(hero),
-            party: Cursor::new(Vec::new(), MP_ALLY_INVARIANTS.to_vec()),
+            party: Cursor::new(Vec::new(), MON_ALLY_INV.to_vec()),
             graveyard: Vec::new(),
-            dungeon: Cursor::new(Vec::new(), MP_MONSTER_INVARIANTS.to_vec()),
+            dungeon: Cursor::new(Vec::new(), MON_DUNGEON_INV.to_vec()),
             treasure: TREASURE.clone(),
             inventory: Vec::new(),
         }

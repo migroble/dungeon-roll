@@ -209,7 +209,6 @@ impl<R: Rng> Game<R> {
         &self,
         terminal: &'a mut Terminal<B>,
     ) -> Result<CompletedFrame<'a>, io::Error> {
-        let size = terminal.size()?;
         terminal.draw(|f| {
             let game = draw_block(f, Block::default().borders(Borders::ALL), f.size());
 
@@ -239,9 +238,9 @@ impl<R: Rng> Game<R> {
             // let graveyard = sublayout[2];
 
             let playfield = sublayout[0];
-            let styler = match &self.phase {
-                Phase::Monster(mp) => self.render_playfield::<_, MPStyler>(f, playfield),
-                Phase::Loot(sp) => self.render_playfield::<_, LPStyler>(f, playfield),
+            match &self.phase {
+                Phase::Monster(_) => self.render_playfield::<_, MPStyler>(f, playfield),
+                Phase::Loot(_) => self.render_playfield::<_, LPStyler>(f, playfield),
                 Phase::Dragon => self.render_playfield::<_, DPStyler>(f, playfield),
                 _ => unreachable!(),
             };
@@ -253,11 +252,11 @@ impl<R: Rng> Game<R> {
 }
 
 trait Styler {
-    fn dungeon_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+    fn dungeon_style<R: Rng>(_game: &Game<R>, _i: usize) -> Style {
         Style::default()
     }
 
-    fn party_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+    fn party_style<R: Rng>(_game: &Game<R>, _i: usize) -> Style {
         Style::default()
     }
 }
@@ -301,7 +300,6 @@ impl Styler for MPStyler {
     }
 
     fn party_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
-        let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
         let is_selected = |i: usize| i == game.party.cursor(PartyCursor::Ally as usize);
         let is_reroll_selected = |i: usize| i == game.party.cursor(PartyCursor::Reroll as usize);
 
@@ -329,7 +327,44 @@ impl Styler for MPStyler {
 }
 
 struct LPStyler;
-impl Styler for LPStyler {}
+impl Styler for LPStyler {
+    fn dungeon_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+        let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
+        let is_affected = |i: usize| game.affects_all() && equal_monsters.contains(&i);
+        let is_selected = |i: usize| i == game.dungeon.cursor(DungeonCursor::Monster as usize);
+
+        let style = Style::default();
+        match game.phase {
+            Phase::Loot(ref mp) => match mp {
+                LootPhase::SelectLoot if game.blink && is_selected(i) => style.bg(Color::White),
+                LootPhase::SelectLoot if !is_selected(i) && is_affected(i) => {
+                    style.bg(Color::DarkGray)
+                }
+                LootPhase::ConfirmLoot if is_affected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                _ => style.bg(Color::Black),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn party_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+        let is_selected = |i: usize| i == game.party.cursor(PartyCursor::Ally as usize);
+
+        let style = Style::default();
+        match game.phase {
+            Phase::Loot(ref lp) => match lp {
+                LootPhase::SelectAlly if game.blink && is_selected(i) => style.bg(Color::White),
+                LootPhase::ConfirmLoot if game.party.is_selected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                _ => style.bg(Color::Black),
+            },
+            _ => unreachable!(),
+        }
+    }
+}
 
 struct DPStyler;
 impl Styler for DPStyler {}

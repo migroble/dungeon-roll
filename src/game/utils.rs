@@ -31,10 +31,6 @@ impl<R: Rng> Game<R> {
         self.party.value(PartyCursor::Ally as usize)
     }
 
-    pub(super) fn current_ally_reroll(&self) -> &Ally {
-        self.party.value(PartyCursor::Reroll as usize)
-    }
-
     pub(super) fn selected_row(&self) -> Option<Row> {
         match self.phase {
             Phase::Monster(
@@ -127,6 +123,11 @@ impl<T> Cursor<T> {
 
     pub fn value(&self, c: usize) -> &T {
         &self.data[self.cursors[c]]
+    }
+
+    pub fn set_invariants(&mut self, invariants: Vec<Invariant<T>>) {
+        self.invariants = invariants;
+        self.canonicalize();
     }
 
     pub fn set_data(&mut self, data: Vec<T>) {
