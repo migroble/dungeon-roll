@@ -33,4 +33,12 @@ impl Hero {
             ult_used: false,
         }
     }
+
+    pub fn xp(&self) -> u64 {
+        self.xp
+    }
+
+    pub fn add_xp(&mut self, amt: u64) {
+        self.xp += amt;
+    }
 }

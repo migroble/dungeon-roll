@@ -51,6 +51,54 @@ fn render_dragon<B: Backend>(f: &mut Frame<B>, area: Rect) {
     f.render_widget(Paragraph::new(DRAGON), dragon_area);
 }
 
+fn render_list<B: Backend>(
+    f: &mut Frame<B>,
+    block: Block,
+    area: Rect,
+    data: Vec<&str>,
+    rows: usize,
+) {
+    let text_area = draw_block(f, block, area);
+    let columns = (data.len() + 1) / rows;
+    let column = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            repeat(Constraint::Ratio(1, rows.try_into().unwrap_or(1)))
+                .take(rows)
+                .collect::<Vec<_>>(),
+        )
+        .split(text_area);
+
+    column.iter().enumerate().for_each(|(i, col)| {
+        let ratio = if i == rows - 1 {
+            data.len() - i * columns
+        } else {
+            columns
+        };
+
+        let row = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(
+                repeat(Constraint::Ratio(1, ratio.try_into().unwrap_or(1)))
+                    .take(columns)
+                    .collect::<Vec<_>>(),
+            )
+            .split(*col);
+
+        row.iter().enumerate().try_for_each(|(j, cell)| {
+            let index = i * columns + j;
+            if index >= data.len() {
+                return ControlFlow::Break(());
+            }
+
+            let r = vertical_center(*cell, 1);
+            f.render_widget(Paragraph::new(data[index]).alignment(Alignment::Center), r);
+
+            ControlFlow::Continue(())
+        });
+    });
+}
+
 impl<R: Rng> Game<R> {
     #[allow(clippy::non_ascii_literal)]
     fn render_controls<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
@@ -92,49 +140,7 @@ impl<R: Rng> Game<R> {
         }
         controls.push("Q: Exit");
 
-        let text_area = draw_block(f, Block::default().borders(Borders::ALL), area);
-        let rows = 2;
-        let columns = (controls.len() + 1) / 2;
-        let column = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(
-                repeat(Constraint::Ratio(1, rows))
-                    .take(rows as usize)
-                    .collect::<Vec<_>>(),
-            )
-            .split(text_area);
-
-        column.iter().enumerate().for_each(|(i, col)| {
-            let ratio = if i == rows as usize - 1 {
-                controls.len() - i * columns
-            } else {
-                columns
-            };
-
-            let row = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints(
-                    repeat(Constraint::Ratio(1, ratio.try_into().unwrap_or(1)))
-                        .take(columns)
-                        .collect::<Vec<_>>(),
-                )
-                .split(*col);
-
-            row.iter().enumerate().try_for_each(|(j, cell)| {
-                let index = i * columns + j;
-                if index >= controls.len() {
-                    return ControlFlow::Break(());
-                }
-
-                let r = vertical_center(*cell, 1);
-                f.render_widget(
-                    Paragraph::new(controls[index]).alignment(Alignment::Center),
-                    r,
-                );
-
-                ControlFlow::Continue(())
-            });
-        });
+        render_list(f, Block::default().borders(Borders::ALL), area, controls, 2);
     }
 
     fn render_array<B: Backend, T: Render>(
@@ -192,6 +198,10 @@ impl<R: Rng> Game<R> {
                 .as_ref(),
             )
             .split(area);
+        let subchunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)].as_ref())
+            .split(chunks[2]);
 
         match self.phase {
             Phase::Dragon(_) => render_dragon(f, chunks[0]),
@@ -215,11 +225,22 @@ impl<R: Rng> Game<R> {
         );
         self.render_array(
             f,
-            chunks[2],
+            subchunks[0],
             Row::Graveyard,
             " Graveyard ",
             &self.graveyard,
             S::graveyard_style,
+        );
+
+        render_list(
+            f,
+            Block::default().title(" Inventory ").borders(Borders::ALL),
+            subchunks[1],
+            vec![
+                &format!("XP: {}", self.hero.xp()),
+                &format!("Loot: {}", self.inventory.len()),
+            ],
+            1,
         );
     }
 

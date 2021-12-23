@@ -35,7 +35,7 @@ lazy_static! {
         |_, _, t| t != &Monster::Chest && t != &Monster::Dragon, // monster cursor
     ];
     static ref DRAGON_ALLY_INV: Vec<Invariant<Ally>> = vec![
-        |_, _, t| t != &Ally::Scroll, // ally cursor
+        |_, _, t| t.is_companion(), // ally cursor
     ];
 }
 

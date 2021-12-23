@@ -13,7 +13,19 @@ impl<R: Rng> Game<R> {
 
     fn next_level(&mut self) {
         self.level += 1;
+        self.dungeon.retain(|m| m == &Monster::Dragon);
         self.dungeon.set_data(roll_n(&mut self.rng, self.level));
+    }
+
+    fn kill_monster(&mut self) {
+        let idx = self.dungeon.cursor(DungeonCursor::Monster as usize);
+        self.dungeon.remove(idx);
+    }
+
+    fn kill_ally(&mut self) {
+        let idx = self.party.cursor(PartyCursor::Ally as usize);
+        let ally = self.party.remove(idx);
+        self.graveyard.push(ally);
     }
 
     fn execute_combat(&mut self) {
@@ -21,13 +33,10 @@ impl<R: Rng> Game<R> {
             let monster = self.current_monster().clone();
             self.dungeon.retain(|m| m != &monster);
         } else {
-            let idx = self.dungeon.cursor(DungeonCursor::Monster as usize);
-            self.dungeon.remove(idx);
+            self.kill_monster();
         }
 
-        let idx = self.party.cursor(PartyCursor::Ally as usize);
-        let ally = self.party.remove(idx);
-        self.graveyard.push(ally);
+        self.kill_ally();
     }
 
     fn execute_reroll(&mut self) {
@@ -43,9 +52,7 @@ impl<R: Rng> Game<R> {
             .for_each(|s| self.dungeon.set_value(*s, roll(&mut self.rng)));
         self.dungeon.clear_selection();
 
-        let idx = self.party.cursor(PartyCursor::Ally as usize);
-        let ally = self.party.remove(idx);
-        self.graveyard.push(ally);
+        self.kill_ally();
     }
 
     fn execute_loot(&mut self) {
@@ -53,6 +60,9 @@ impl<R: Rng> Game<R> {
             self.treasure
                 .remove(self.rng.gen_range(0..self.treasure.len())),
         );
+
+        self.kill_monster();
+        self.kill_ally();
     }
 
     fn execute_graveyard(&mut self) {
@@ -73,13 +83,14 @@ impl<R: Rng> Game<R> {
             }
         });
 
-        let idx = self.party.cursor(PartyCursor::Ally as usize);
-        let ally = self.party.remove(idx);
-        self.graveyard.push(ally);
+        self.kill_ally();
     }
 
     fn execute_dragon(&mut self) {
-        self.dungeon.retain(|m| m != &Monster::Dragon);
+        self.party.selection().iter().for_each(|s| {
+            self.party.remove(*s);
+        });
+        self.party.clear_selection();
     }
 
     fn enter_phase_trigger(&mut self) -> bool {
@@ -108,6 +119,8 @@ impl<R: Rng> Game<R> {
                     self.party.set_invariants(LOOT_ALLY_INV.to_vec());
                 }
                 LootPhase::SelectLoot => {
+                    self.dungeon.clear_selection();
+                    self.party.clear_selection();
                     if let Ally::Scroll = self.current_ally() {
                         self.dungeon
                             .set_invariants(LOOT_SCROLL_DUNGEON_INV.to_vec());
@@ -131,7 +144,6 @@ impl<R: Rng> Game<R> {
             }
             _ => (),
         }
-
         false
     }
 
@@ -188,7 +200,13 @@ impl<R: Rng> Game<R> {
                 }
                 LootPhase::SelectGraveyard => Phase::Loot(LootPhase::ConfirmGraveyard),
             },
-            Phase::Dragon(DragonPhase::SelectAlly) => Phase::Dragon(DragonPhase::Confirm),
+            Phase::Dragon(DragonPhase::SelectAlly) => {
+                if self.party.selection().len() == 3 {
+                    Phase::Dragon(DragonPhase::Confirm)
+                } else {
+                    Phase::Dragon(DragonPhase::SelectAlly)
+                }
+            }
             Phase::Dragon(DragonPhase::Confirm) => Phase::Regroup,
         };
         while self.enter_phase_trigger() {}

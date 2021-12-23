@@ -35,6 +35,12 @@ impl Render for Ally {
     }
 }
 
+impl Ally {
+    pub fn is_companion(&self) -> bool {
+        !matches!(self, Ally::Scroll)
+    }
+}
+
 #[derive(Debug, Dice, PartialEq, Clone)]
 pub enum Monster {
     Goblin,
