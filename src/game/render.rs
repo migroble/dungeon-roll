@@ -6,153 +6,168 @@ use tui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     terminal::{CompletedFrame, Frame},
-    text::Text,
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Paragraph},
     Terminal,
 };
 
 impl<R: Rng> Game<R> {
+    fn render_array<B: Backend, T: Render>(
+        &self,
+        f: &mut Frame<B>,
+        area: Rect,
+        data: &[T],
+        style_fn: fn(&Game<R>, usize) -> Style,
+    ) {
+        let row = Layout::default()
+            .direction(Direction::Horizontal)
+            .horizontal_margin(1)
+            .vertical_margin(2)
+            .constraints(
+                repeat(Constraint::Ratio(1, data.len() as u32))
+                    .take(data.len())
+                    .collect::<Vec<_>>(),
+            )
+            .split(area);
+
+        row.iter().zip(data).enumerate().for_each(|(i, (c, t))| {
+            let style = style_fn(self, i);
+            let mut sprite = t.render();
+            sprite.patch_style(style);
+            f.render_widget(Paragraph::new(sprite).alignment(Alignment::Center), *c)
+        });
+    }
+
     fn render_monster_phase<B: Backend>(
         &self,
         f: &mut Frame<B>,
-        window: Rect,
+        area: Rect,
         subphase: &MonsterPhase,
     ) {
+        f.render_widget(Block::default().borders(Borders::ALL), area);
+
         let middle = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-            .split(window);
+            .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)].as_ref())
+            .split(area);
 
-        let monster_row = Layout::default()
-            .direction(Direction::Horizontal)
-            .margin(1)
-            .constraints(
-                repeat(Constraint::Ratio(1, self.dungeon.len() as u32))
-                    .take(self.dungeon.len())
-                    .collect::<Vec<_>>(),
-            )
-            .split(middle[0]);
+        fn monster_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+            let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
+            let is_affected = |i: usize| game.affects_all() && equal_monsters.contains(&i);
+            let is_selected = |i: usize| i == game.dungeon.cursor(DungeonCursor::Monster as usize);
+            let is_reroll_selected =
+                |i: usize| i == game.dungeon.cursor(DungeonCursor::Reroll as usize);
 
-        let equal_monsters = indexes_of(&self.dungeon, self.current_monster());
-        let is_affected = |i: usize| self.affects_all() && equal_monsters.contains(&i);
-        let is_selected = |i: usize| i == self.dungeon.cursor(DungeonCursor::Monster as usize);
-        let is_reroll_selected =
-            |i: usize| i == self.dungeon.cursor(DungeonCursor::Reroll as usize);
-        monster_row
-            .iter()
-            .zip(&*self.dungeon)
-            .enumerate()
-            .for_each(|(i, (c, m))| {
-                let style = Style::default();
-                let style = match subphase {
-                    MonsterPhase::SelectMonster if self.blink && is_selected(i) => {
+            let style = Style::default();
+            match game.phase {
+                Phase::Monster(ref mp) => match mp {
+                    MonsterPhase::SelectMonster if game.blink && is_selected(i) => {
                         style.bg(Color::White)
                     }
                     MonsterPhase::SelectReroll(Reroll::Monster)
-                        if self.blink && is_reroll_selected(i) =>
+                        if game.blink && is_reroll_selected(i) =>
                     {
                         style.bg(Color::White)
                     }
                     MonsterPhase::SelectMonster if !is_selected(i) && is_affected(i) => {
                         style.bg(Color::DarkGray)
                     }
-                    MonsterPhase::SelectReroll(_) if self.dungeon.is_selected(i) => {
+                    MonsterPhase::SelectReroll(_) if game.dungeon.is_selected(i) => {
                         style.bg(Color::DarkGray)
                     }
-                    MonsterPhase::ConfirmReroll if self.dungeon.is_selected(i) => {
+                    MonsterPhase::ConfirmReroll if game.dungeon.is_selected(i) => {
                         style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                     }
                     MonsterPhase::ConfirmCombat if is_affected(i) => {
                         style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                     }
                     _ => style.bg(Color::Black),
-                };
+                },
+                _ => unreachable!(),
+            }
+        }
 
-                let mut sprite = m.render();
-                sprite.patch_style(style);
-                f.render_widget(
-                    Paragraph::new(sprite)
-                        .block(Block::default().borders(Borders::ALL))
-                        .alignment(Alignment::Center),
-                    *c,
-                )
-            });
+        fn ally_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+            let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
+            let is_selected = |i: usize| i == game.party.cursor(PartyCursor::Ally as usize);
+            let is_reroll_selected =
+                |i: usize| i == game.party.cursor(PartyCursor::Reroll as usize);
 
-        let party_row = Layout::default()
-            .direction(Direction::Horizontal)
-            .margin(1)
-            .constraints(
-                repeat(Constraint::Ratio(1, self.party.len() as u32))
-                    .take(self.party.len())
-                    .collect::<Vec<_>>(),
-            )
-            .split(middle[1]);
-
-        let is_selected = |i: usize| i == self.party.cursor(PartyCursor::Ally as usize);
-        let is_reroll_selected = |i: usize| i == self.party.cursor(PartyCursor::Reroll as usize);
-        party_row
-            .iter()
-            .zip(&*self.party)
-            .enumerate()
-            .for_each(|(i, (c, p))| {
-                let style = Style::default();
-                let style = match subphase {
-                    MonsterPhase::SelectAlly if self.blink && is_selected(i) => {
+            let style = Style::default();
+            match game.phase {
+                Phase::Monster(ref mp) => match mp {
+                    MonsterPhase::SelectAlly if game.blink && is_selected(i) => {
                         style.bg(Color::White)
                     }
                     MonsterPhase::SelectReroll(Reroll::Ally)
-                        if self.blink && is_reroll_selected(i) =>
+                        if game.blink && is_reroll_selected(i) =>
                     {
                         style.bg(Color::White)
                     }
-                    MonsterPhase::SelectReroll(_) if self.party.is_selected(i) => {
+                    MonsterPhase::SelectReroll(_) if game.party.is_selected(i) => {
                         style.bg(Color::DarkGray)
                     }
-                    MonsterPhase::ConfirmReroll if self.party.is_selected(i) => {
+                    MonsterPhase::ConfirmReroll if game.party.is_selected(i) => {
                         style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                     }
-                    _ if subphase != &MonsterPhase::SelectAlly && is_selected(i) => {
+                    _ if mp != &MonsterPhase::SelectAlly && is_selected(i) => {
                         style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                     }
                     _ => style.bg(Color::Black),
-                };
+                },
+                _ => unreachable!(),
+            }
+        }
 
-                let mut sprite = p.render();
-                sprite.patch_style(style);
-                f.render_widget(
-                    Paragraph::new(sprite)
-                        .block(Block::default().borders(Borders::ALL))
-                        .alignment(Alignment::Center),
-                    *c,
-                )
-            });
+        f.render_widget(Block::default().borders(Borders::ALL), middle[0]);
+        f.render_widget(Block::default().borders(Borders::ALL), middle[1]);
+
+        self.render_array(f, middle[0], &*self.dungeon, monster_style);
+        self.render_array(f, middle[1], &*self.party, ally_style);
     }
 
     pub fn render<'a, B: Backend>(
         &self,
         terminal: &'a mut Terminal<B>,
     ) -> Result<CompletedFrame<'a>, io::Error> {
+        let size = terminal.size()?;
+
         terminal.draw(|f| {
-            let chunks = Layout::default()
+            let layout = Layout::default()
                 .direction(Direction::Vertical)
-                .margin(1)
-                .constraints([Constraint::Length(5), Constraint::Percentage(100)].as_ref())
+                .horizontal_margin(1)
+                .vertical_margin(size.height.checked_sub(24).unwrap_or(0) / 2)
+                .constraints([Constraint::Length(12), Constraint::Length(9)])
                 .split(f.size());
+            let sublayout = Layout::default()
+                .direction(Direction::Horizontal)
+                .margin(1)
+                .constraints([
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(60),
+                    Constraint::Percentage(20),
+                ])
+                .split(layout[0]);
+
+            let info = sublayout[0];
+            let playfield = sublayout[1];
+            let graveyard = sublayout[2];
+
+            let controls = layout[1];
+
+            f.render_widget(
+                Block::default().title("layout 0").borders(Borders::ALL),
+                layout[0],
+            );
+            f.render_widget(
+                Block::default().title("controls").borders(Borders::ALL),
+                controls,
+            );
 
             #[allow(clippy::single_match)]
             match &self.phase {
-                Phase::Monster(sp) => self.render_monster_phase(f, chunks[1], sp),
+                Phase::Monster(sp) => self.render_monster_phase(f, playfield, sp),
                 _ => (),
             }
-
-            let paragraph = Paragraph::new(Text::from("\nWelcome to the dungeon!"))
-                .block(Block::default().borders(Borders::ALL))
-                .style(Style::default().fg(Color::White).bg(Color::Black))
-                .alignment(Alignment::Center)
-                .wrap(Wrap { trim: true });
-
-            f.render_widget(paragraph, chunks[0]);
-            f.render_widget(Block::default().borders(Borders::ALL), chunks[1]);
         })
     }
 }

@@ -8,6 +8,10 @@ pub trait Dice {
     fn faces() -> u64;
 }
 
+pub trait Render {
+    fn render(&self) -> Text;
+}
+
 #[derive(Debug, Dice, PartialEq)]
 pub enum Ally {
     Fighter,
@@ -18,8 +22,8 @@ pub enum Ally {
     Scroll,
 }
 
-impl Ally {
-    pub fn render(&self) -> Text {
+impl Render for Ally {
+    fn render(&self) -> Text {
         match self {
             Ally::Fighter => Text::styled("F", Style::default().fg(Color::Green)),
             Ally::Cleric => Text::styled("C", Style::default().fg(Color::Gray)),
@@ -41,8 +45,8 @@ pub enum Monster {
     Potion,
 }
 
-impl Monster {
-    pub fn render(&self) -> Text {
+impl Render for Monster {
+    fn render(&self) -> Text {
         match self {
             Monster::Goblin => Text::styled("G", Style::default().fg(Color::Green)),
             Monster::Skeleton => Text::styled("S", Style::default().fg(Color::Gray)),
@@ -52,7 +56,9 @@ impl Monster {
             Monster::Potion => Text::styled("P", Style::default().fg(Color::Rgb(255, 165, 0))),
         }
     }
+}
 
+impl Monster {
     pub fn is_monster(&self) -> bool {
         matches!(self, Monster::Goblin | Monster::Skeleton | Monster::Ooze)
     }
