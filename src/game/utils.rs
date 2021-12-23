@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    Ally, Dice, DragonPhase, DungeonCursor, Game, LootPhase, Monster, MonsterPhase, PartyCursor,
+    Phase, Reroll, Rng,
+};
 use std::{collections::HashSet, ops::Deref};
 
 pub fn roll<T: Dice, R: Rng>(rng: &mut R) -> T {
@@ -48,11 +51,11 @@ impl<R: Rng> Game<R> {
     }
 
     pub(super) fn has_monsters(&self) -> bool {
-        self.dungeon.iter().any(|m| m.is_monster())
+        self.dungeon.iter().any(Monster::is_monster)
     }
 
     pub(super) fn has_loot(&self) -> bool {
-        self.dungeon.iter().any(|m| m.is_loot())
+        self.dungeon.iter().any(Monster::is_loot)
     }
 
     pub(super) fn potion_count(&self) -> usize {

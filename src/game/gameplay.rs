@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    roll, roll_n, Ally, DragonPhase, DungeonCursor, Game, LootPhase, Monster, MonsterPhase,
+    PartyCursor, Phase, Reroll, Rng, DRAGON_ALLY_INV, LOOT_ALLY_INV, LOOT_DUNGEON_INV,
+    LOOT_SCROLL_DUNGEON_INV, MON_ALLY_INV, MON_DUNGEON_INV,
+};
 
 impl<R: Rng> Game<R> {
     pub(super) fn next_delve(&mut self) {
@@ -75,7 +79,7 @@ impl<R: Rng> Game<R> {
     }
 
     fn execute_dragon(&mut self) {
-        self.dungeon.retain(|m| m != &Monster::Dragon)
+        self.dungeon.retain(|m| m != &Monster::Dragon);
     }
 
     fn enter_phase_trigger(&mut self) -> bool {
@@ -101,7 +105,7 @@ impl<R: Rng> Game<R> {
                         return true;
                     }
 
-                    self.party.set_invariants(LOOT_ALLY_INV.to_vec())
+                    self.party.set_invariants(LOOT_ALLY_INV.to_vec());
                 }
                 LootPhase::SelectLoot => {
                     if let Ally::Scroll = self.current_ally() {
@@ -112,7 +116,7 @@ impl<R: Rng> Game<R> {
                     }
                 }
                 LootPhase::SelectGraveyard => {
-                    self.graveyard.set_selection_limit(self.potion_count())
+                    self.graveyard.set_selection_limit(self.potion_count());
                 }
                 _ => (),
             },
@@ -151,7 +155,7 @@ impl<R: Rng> Game<R> {
     pub(super) fn next_phase(&mut self) {
         self.exit_phase_trigger();
         self.phase = match self.phase {
-            Phase::Setup => Phase::Setup,
+            Phase::Setup | Phase::Regroup => Phase::Setup,
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => {
                     if self.current_ally() == &Ally::Scroll {
@@ -161,9 +165,10 @@ impl<R: Rng> Game<R> {
                     }
                 }
                 MonsterPhase::SelectReroll(_) => Phase::Monster(MonsterPhase::ConfirmReroll),
-                MonsterPhase::ConfirmReroll => Phase::Monster(MonsterPhase::SelectAlly),
+                MonsterPhase::ConfirmReroll | MonsterPhase::ConfirmCombat => {
+                    Phase::Monster(MonsterPhase::SelectAlly)
+                }
                 MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::ConfirmCombat),
-                MonsterPhase::ConfirmCombat => Phase::Monster(MonsterPhase::SelectAlly),
             },
             Phase::Loot(ref lp) => match lp {
                 LootPhase::SelectAlly => {
@@ -178,13 +183,13 @@ impl<R: Rng> Game<R> {
                     Monster::Potion => Phase::Loot(LootPhase::SelectGraveyard),
                     _ => Phase::Loot(LootPhase::SelectLoot),
                 },
-                LootPhase::ConfirmLoot => Phase::Loot(LootPhase::SelectAlly),
+                LootPhase::ConfirmLoot | LootPhase::ConfirmGraveyard => {
+                    Phase::Loot(LootPhase::SelectAlly)
+                }
                 LootPhase::SelectGraveyard => Phase::Loot(LootPhase::ConfirmGraveyard),
-                LootPhase::ConfirmGraveyard => Phase::Loot(LootPhase::SelectAlly),
             },
             Phase::Dragon(DragonPhase::SelectAlly) => Phase::Dragon(DragonPhase::Confirm),
             Phase::Dragon(DragonPhase::Confirm) => Phase::Regroup,
-            Phase::Regroup => Phase::Setup,
         };
         while self.enter_phase_trigger() {}
     }
@@ -192,19 +197,20 @@ impl<R: Rng> Game<R> {
     pub(super) fn prev_phase(&mut self) {
         self.phase = match self.phase {
             Phase::Monster(ref mp) => match mp {
-                MonsterPhase::SelectAlly => Phase::Monster(MonsterPhase::SelectAlly),
-                MonsterPhase::SelectReroll(_) => Phase::Monster(MonsterPhase::SelectAlly),
+                MonsterPhase::SelectAlly
+                | MonsterPhase::SelectReroll(_)
+                | MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::SelectAlly),
                 MonsterPhase::ConfirmReroll => {
                     Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally))
                 }
-                MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::SelectAlly),
                 MonsterPhase::ConfirmCombat => Phase::Monster(MonsterPhase::SelectMonster),
             },
             Phase::Loot(ref lp) => match lp {
                 LootPhase::SelectAlly => Phase::Dragon(DragonPhase::SelectAlly),
                 LootPhase::SelectLoot => Phase::Loot(LootPhase::SelectAlly),
-                LootPhase::ConfirmLoot => Phase::Loot(LootPhase::SelectLoot),
-                LootPhase::SelectGraveyard => Phase::Loot(LootPhase::SelectLoot),
+                LootPhase::ConfirmLoot | LootPhase::SelectGraveyard => {
+                    Phase::Loot(LootPhase::SelectLoot)
+                }
                 LootPhase::ConfirmGraveyard => Phase::Loot(LootPhase::SelectGraveyard),
             },
             Phase::Dragon(_) => Phase::Dragon(DragonPhase::SelectAlly),

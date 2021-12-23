@@ -1,11 +1,11 @@
 #[derive(Debug)]
-pub enum HeroLevel {
+pub enum Level {
     Novice,
     Expert,
 }
 
 #[derive(Debug)]
-pub enum HeroType {
+pub enum Type {
     Bard,
     Battlemage,
     Beguiler,
@@ -18,17 +18,17 @@ pub enum HeroType {
 
 #[derive(Debug)]
 pub struct Hero {
-    hero: HeroType,
-    level: HeroLevel,
+    hero: Type,
+    level: Level,
     xp: u64,
     ult_used: bool,
 }
 
 impl Hero {
-    pub fn new(hero: HeroType) -> Self {
+    pub fn new(hero: Type) -> Self {
         Self {
             hero,
-            level: HeroLevel::Novice,
+            level: Level::Novice,
             xp: 0,
             ult_used: false,
         }

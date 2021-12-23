@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    DragonPhase, DungeonCursor, Game, LootPhase, MonsterPhase, PartyCursor, Phase, Reroll, Rng,
+};
 use crossterm::event::{Event, KeyCode};
 
 impl<R: Rng> Game<R> {
@@ -11,10 +13,10 @@ impl<R: Rng> Game<R> {
                 (KeyCode::Esc, _) => self.prev_phase(),
                 (KeyCode::Char('q'), _) => return true,
                 (KeyCode::Up, Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally))) => {
-                    self.select_top()
+                    self.select_top();
                 }
                 (KeyCode::Down, Phase::Monster(MonsterPhase::SelectReroll(Reroll::Monster))) => {
-                    self.select_bottom()
+                    self.select_bottom();
                 }
                 (
                     KeyCode::Char(' '),
@@ -37,14 +39,14 @@ impl<R: Rng> Game<R> {
             | Phase::Loot(LootPhase::SelectAlly)
             | Phase::Dragon(DragonPhase::SelectAlly) => self.party.next(PartyCursor::Ally as usize),
             Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally)) => {
-                self.party.next(PartyCursor::Reroll as usize)
+                self.party.next(PartyCursor::Reroll as usize);
             }
             Phase::Loot(LootPhase::SelectGraveyard) => self.graveyard.next(0),
             Phase::Monster(MonsterPhase::SelectMonster) | Phase::Loot(LootPhase::SelectLoot) => {
-                self.dungeon.next(DungeonCursor::Monster as usize)
+                self.dungeon.next(DungeonCursor::Monster as usize);
             }
             Phase::Monster(MonsterPhase::SelectReroll(Reroll::Monster)) => {
-                self.dungeon.next(DungeonCursor::Reroll as usize)
+                self.dungeon.next(DungeonCursor::Reroll as usize);
             }
             _ => (),
         };
@@ -56,14 +58,14 @@ impl<R: Rng> Game<R> {
             | Phase::Loot(LootPhase::SelectAlly)
             | Phase::Dragon(DragonPhase::SelectAlly) => self.party.prev(PartyCursor::Ally as usize),
             Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally)) => {
-                self.party.prev(PartyCursor::Reroll as usize)
+                self.party.prev(PartyCursor::Reroll as usize);
             }
             Phase::Loot(LootPhase::SelectGraveyard) => self.graveyard.prev(0),
             Phase::Monster(MonsterPhase::SelectMonster) | Phase::Loot(LootPhase::SelectLoot) => {
-                self.dungeon.prev(DungeonCursor::Monster as usize)
+                self.dungeon.prev(DungeonCursor::Monster as usize);
             }
             Phase::Monster(MonsterPhase::SelectReroll(Reroll::Monster)) => {
-                self.dungeon.prev(DungeonCursor::Reroll as usize)
+                self.dungeon.prev(DungeonCursor::Reroll as usize);
             }
             _ => (),
         };
@@ -77,7 +79,7 @@ impl<R: Rng> Game<R> {
             },
             Phase::Loot(LootPhase::SelectGraveyard) => self.graveyard.toggle_select(0),
             Phase::Dragon(DragonPhase::SelectAlly) => {
-                self.party.toggle_select(PartyCursor::Ally as usize)
+                self.party.toggle_select(PartyCursor::Ally as usize);
             }
             _ => (),
         }

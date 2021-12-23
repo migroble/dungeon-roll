@@ -1,4 +1,9 @@
-use crate::{dice::*, hero::*, phase::*, treasure::*};
+use crate::{
+    dice::{Ally, Dice, Monster, Render},
+    hero::{Hero, Type},
+    phase::{Dragon as DragonPhase, Loot as LootPhase, Monster as MonsterPhase, Phase, Reroll},
+    treasure::{Treasure, TREASURE},
+};
 use rand::prelude::*;
 
 mod controls;
@@ -6,7 +11,7 @@ mod gameplay;
 mod render;
 mod utils;
 
-use utils::*;
+use utils::{indexes_of, roll, roll_n, Cursor, Invariant, Row};
 
 lazy_static! {
     static ref MON_ALLY_INV: Vec<Invariant<Ally>> = vec![
@@ -61,7 +66,7 @@ pub struct Game<R: Rng> {
 }
 
 impl<R: Rng> Game<R> {
-    pub fn new(rng: R, hero: HeroType) -> Self {
+    pub fn new(rng: R, hero: Type) -> Self {
         let mut game = Self {
             rng,
             blink: true,

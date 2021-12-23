@@ -29,11 +29,11 @@ lazy_static! {
         amounts.insert(Treasure::TownPortal, 4);
 
         let mut treasure = Vec::with_capacity(36);
-        amounts.iter().for_each(|(item, amt)| {
+        for (item, amt) in &amounts {
             (0..*amt).for_each(|_| {
                 treasure.push(item.clone());
-            })
-        });
+            });
+        }
 
         treasure
     };

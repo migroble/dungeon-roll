@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+#![deny(clippy::pedantic)]
 
 use crossterm::{
     event::EventStream,
@@ -24,15 +25,15 @@ mod hero;
 mod phase;
 mod treasure;
 
-use game::*;
-use hero::HeroType;
+use game::Game;
+use hero::Type;
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
     let mut seed: <Pcg64Mcg as SeedableRng>::Seed = Default::default();
     thread_rng().fill(&mut seed);
     let rng = Pcg64Mcg::from_seed(seed);
-    let mut game = Game::new(rng, HeroType::Bard);
+    let mut game = Game::new(rng, Type::Bard);
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();

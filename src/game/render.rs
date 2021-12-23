@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    indexes_of, DragonPhase, DungeonCursor, Game, LootPhase, MonsterPhase, PartyCursor, Phase,
+    Render, Reroll, Rng, Row,
+};
 use std::{io, iter::repeat, ops::ControlFlow};
 use tui::layout::Rect;
 use tui::{
@@ -33,7 +36,23 @@ fn draw_block<B: Backend>(f: &mut Frame<B>, block: Block, area: Rect) -> Rect {
     inner
 }
 
+fn render_dragon<B: Backend>(f: &mut Frame<B>, area: Rect) {
+    let display_area = draw_block(
+        f,
+        Block::default().title(" Dungeon ").borders(Borders::ALL),
+        area,
+    );
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(100)])
+        .split(display_area);
+    let dragon_area = vertical_center(chunks[1], DRAGON.lines().count().try_into().unwrap_or(0));
+
+    f.render_widget(Paragraph::new(DRAGON), dragon_area);
+}
+
 impl<R: Rng> Game<R> {
+    #[allow(clippy::non_ascii_literal)]
     fn render_controls<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
         let mut controls = vec!["→: Next", "←: Previous"];
         match self.phase {
@@ -44,14 +63,15 @@ impl<R: Rng> Game<R> {
                     "Enter: Confirm",
                     "Esc: Back",
                 ]),
-                MonsterPhase::ConfirmCombat => controls = vec!["Enter: Confirm", "Esc: Back"],
+                MonsterPhase::ConfirmCombat | MonsterPhase::ConfirmReroll => {
+                    controls = vec!["Enter: Confirm", "Esc: Back"];
+                }
                 MonsterPhase::SelectReroll(Reroll::Monster) => controls.append(&mut vec![
                     "↓: Party row",
                     "Space: Select",
                     "Enter: Confirm",
                     "Esc: Back",
                 ]),
-                MonsterPhase::ConfirmReroll => controls = vec!["Enter: Confirm", "Esc: Back"],
                 _ => controls.append(&mut vec!["Enter: Select", "Esc: Back"]),
             },
             Phase::Loot(ref lp) => controls.append(&mut vec![
@@ -62,10 +82,10 @@ impl<R: Rng> Game<R> {
                 },
             ]),
             Phase::Dragon(DragonPhase::SelectAlly) => {
-                controls.append(&mut vec!["Space: Select", "Enter: Confirm"])
+                controls.append(&mut vec!["Space: Select", "Enter: Confirm"]);
             }
             Phase::Dragon(DragonPhase::Confirm) => {
-                controls.append(&mut vec!["Enter: Confirm", "Esc: Back"])
+                controls.append(&mut vec!["Enter: Confirm", "Esc: Back"]);
             }
             Phase::Regroup => (),
             _ => unreachable!(),
@@ -78,14 +98,14 @@ impl<R: Rng> Game<R> {
         let column = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
-                repeat(Constraint::Ratio(1, rows as u32))
-                    .take(rows)
+                repeat(Constraint::Ratio(1, rows))
+                    .take(rows as usize)
                     .collect::<Vec<_>>(),
             )
             .split(text_area);
 
         column.iter().enumerate().for_each(|(i, col)| {
-            let ratio = if i == rows - 1 {
+            let ratio = if i == rows as usize - 1 {
                 controls.len() - i * columns
             } else {
                 columns
@@ -94,7 +114,7 @@ impl<R: Rng> Game<R> {
             let row = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints(
-                    repeat(Constraint::Ratio(1, ratio as u32))
+                    repeat(Constraint::Ratio(1, ratio.try_into().unwrap_or(1)))
                         .take(columns)
                         .collect::<Vec<_>>(),
                 )
@@ -114,7 +134,7 @@ impl<R: Rng> Game<R> {
 
                 ControlFlow::Continue(())
             });
-        })
+        });
     }
 
     fn render_array<B: Backend, T: Render>(
@@ -144,7 +164,7 @@ impl<R: Rng> Game<R> {
         let row = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(
-                repeat(Constraint::Ratio(1, data.len() as u32))
+                repeat(Constraint::Ratio(1, data.len().try_into().unwrap_or(1)))
                     .take(data.len())
                     .collect::<Vec<_>>(),
             )
@@ -156,23 +176,8 @@ impl<R: Rng> Game<R> {
             sprite.patch_style(style);
 
             let r = vertical_center(*col, 1);
-            f.render_widget(Paragraph::new(sprite).alignment(Alignment::Center), r)
+            f.render_widget(Paragraph::new(sprite).alignment(Alignment::Center), r);
         });
-    }
-
-    fn render_dragon<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
-        let display_area = draw_block(
-            f,
-            Block::default().title(" Dungeon ").borders(Borders::ALL),
-            area,
-        );
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(30), Constraint::Percentage(100)])
-            .split(display_area);
-        let dragon_area = vertical_center(chunks[1], DRAGON.lines().count() as u16);
-
-        f.render_widget(Paragraph::new(DRAGON), dragon_area);
     }
 
     fn render_playfield<B: Backend, S: Styler>(&self, f: &mut Frame<B>, area: Rect) {
@@ -189,7 +194,7 @@ impl<R: Rng> Game<R> {
             .split(area);
 
         match self.phase {
-            Phase::Dragon(_) => self.render_dragon(f, chunks[0]),
+            Phase::Dragon(_) => render_dragon(f, chunks[0]),
             Phase::Regroup => (),
             _ => self.render_array(
                 f,

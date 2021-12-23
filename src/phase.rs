@@ -1,14 +1,15 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum Phase {
     Setup,
-    Monster(MonsterPhase),
-    Loot(LootPhase),
-    Dragon(DragonPhase),
+    Monster(Monster),
+    Loot(Loot),
+    Dragon(Dragon),
     Regroup,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, PartialEq, Eq)]
-pub enum MonsterPhase {
+pub enum Monster {
     SelectAlly,
     SelectReroll(Reroll),
     ConfirmReroll,
@@ -22,8 +23,9 @@ pub enum Reroll {
     Monster,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, PartialEq, Eq)]
-pub enum LootPhase {
+pub enum Loot {
     SelectAlly,
     SelectLoot,
     ConfirmLoot,
@@ -32,7 +34,7 @@ pub enum LootPhase {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum DragonPhase {
+pub enum Dragon {
     SelectAlly,
     Confirm,
 }
