@@ -214,7 +214,7 @@ impl<R: Rng> Game<R> {
             Row::Graveyard,
             " Graveyard ",
             &self.graveyard,
-            |_, _| Style::default(),
+            S::graveyard_style,
         );
     }
 
@@ -268,6 +268,10 @@ trait Styler {
     }
 
     fn party_style<R: Rng>(_game: &Game<R>, _i: usize) -> Style {
+        Style::default()
+    }
+
+    fn graveyard_style<R: Rng>(_game: &Game<R>, _i: usize) -> Style {
         Style::default()
     }
 }
@@ -341,8 +345,12 @@ impl Styler for MPStyler {
 struct LPStyler;
 impl Styler for LPStyler {
     fn dungeon_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
-        let equal_monsters = indexes_of(&game.dungeon, game.current_monster());
-        let is_selected = |i: usize| i == game.dungeon.cursor(DungeonCursor::Monster as usize);
+        let cursor = game.dungeon.cursor(DungeonCursor::Monster as usize);
+        let mut equal_monsters = indexes_of(&game.dungeon, game.current_monster());
+        equal_monsters.retain(|i| *i != cursor);
+        equal_monsters.truncate(game.graveyard.selection().len().saturating_sub(1));
+
+        let is_selected = |i: usize| i == cursor;
         let is_affected =
             |i: usize| game.affects_all() && equal_monsters.contains(&i) || is_selected(i);
 
@@ -350,10 +358,12 @@ impl Styler for LPStyler {
         match game.phase {
             Phase::Loot(ref mp) => match mp {
                 LootPhase::SelectLoot if game.blink && is_selected(i) => style.bg(Color::White),
-                LootPhase::SelectLoot if !is_selected(i) && is_affected(i) => {
-                    style.bg(Color::DarkGray)
-                }
+                LootPhase::SelectLoot if is_affected(i) => style.bg(Color::DarkGray),
                 LootPhase::ConfirmLoot if is_affected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                LootPhase::SelectGraveyard if is_affected(i) => style.bg(Color::DarkGray),
+                LootPhase::ConfirmGraveyard if is_affected(i) => {
                     style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                 }
                 _ => style.bg(Color::Black),
@@ -370,6 +380,31 @@ impl Styler for LPStyler {
             Phase::Loot(ref lp) => match lp {
                 LootPhase::SelectAlly if game.blink && is_selected(i) => style.bg(Color::White),
                 LootPhase::ConfirmLoot if game.party.is_selected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                LootPhase::SelectGraveyard if is_selected(i) => style.bg(Color::DarkGray),
+                LootPhase::ConfirmGraveyard if is_selected(i) => {
+                    style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                }
+                _ => style.bg(Color::Black),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn graveyard_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
+        let is_selected = |i: usize| i == game.graveyard.cursor(0);
+
+        let style = Style::default();
+        match game.phase {
+            Phase::Loot(ref lp) => match lp {
+                LootPhase::SelectGraveyard if game.blink && is_selected(i) => {
+                    style.bg(Color::White)
+                }
+                LootPhase::SelectGraveyard if game.graveyard.is_selected(i) => {
+                    style.bg(Color::DarkGray)
+                }
+                LootPhase::ConfirmGraveyard if game.graveyard.is_selected(i) => {
                     style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                 }
                 _ => style.bg(Color::Black),

@@ -51,22 +51,31 @@ impl<R: Rng> Game<R> {
         );
     }
 
-    fn execute_graveyard(&mut self) {}
+    fn execute_graveyard(&mut self) {
+        let sel = self.graveyard.selection();
+        let revives = sel.len();
+
+        sel.iter()
+            .for_each(|s| self.party.push(self.graveyard.remove(*s)));
+        self.graveyard.clear_selection();
+
+        let mut i = 0;
+        self.dungeon.retain(|m| {
+            if m == &Monster::Potion && i < revives {
+                i += 1;
+                false
+            } else {
+                true
+            }
+        });
+
+        let idx = self.party.cursor(PartyCursor::Ally as usize);
+        let ally = self.party.remove(idx);
+        self.graveyard.push(ally);
+    }
 
     fn execute_dragon(&mut self) {
         self.dungeon.retain(|m| m != &Monster::Dragon)
-    }
-
-    fn end_loot_phase(&mut self) -> Phase {
-        if self.has_loot() {
-            Phase::Loot(LootPhase::SelectAlly)
-        } else {
-            self.dragon_phase()
-        }
-    }
-
-    fn dragon_phase(&mut self) -> Phase {
-        Phase::Dragon(DragonPhase::SelectAlly)
     }
 
     fn enter_phase_trigger(&mut self) -> bool {
@@ -85,25 +94,32 @@ impl<R: Rng> Game<R> {
                 self.party.set_invariants(MON_ALLY_INV.to_vec());
                 self.dungeon.set_invariants(MON_DUNGEON_INV.to_vec());
             }
-            Phase::Loot(LootPhase::SelectAlly) => {
-                if !self.has_loot() {
-                    self.phase = Phase::Dragon(DragonPhase::SelectAlly);
-                    return true;
-                }
+            Phase::Loot(ref lp) => match lp {
+                LootPhase::SelectAlly => {
+                    if !self.has_loot() {
+                        self.phase = Phase::Dragon(DragonPhase::SelectAlly);
+                        return true;
+                    }
 
-                self.party.set_invariants(LOOT_ALLY_INV.to_vec())
-            }
-            Phase::Loot(LootPhase::SelectLoot) => {
-                if let Ally::Scroll = self.current_ally() {
-                    self.dungeon
-                        .set_invariants(LOOT_SCROLL_DUNGEON_INV.to_vec());
-                } else {
-                    self.dungeon.set_invariants(LOOT_DUNGEON_INV.to_vec());
+                    self.party.set_invariants(LOOT_ALLY_INV.to_vec())
                 }
-            }
+                LootPhase::SelectLoot => {
+                    if let Ally::Scroll = self.current_ally() {
+                        self.dungeon
+                            .set_invariants(LOOT_SCROLL_DUNGEON_INV.to_vec());
+                    } else {
+                        self.dungeon.set_invariants(LOOT_DUNGEON_INV.to_vec());
+                    }
+                }
+                LootPhase::SelectGraveyard => {
+                    self.graveyard.set_selection_limit(self.potion_count())
+                }
+                _ => (),
+            },
             Phase::Dragon(DragonPhase::SelectAlly) => {
                 if self.dragon_dice() >= 3 {
-                    self.party.set_invariants(DRAGON_ALLY_INV.to_vec())
+                    self.party.set_invariants(DRAGON_ALLY_INV.to_vec());
+                    self.party.set_selection_limit(3);
                 } else {
                     self.phase = Phase::Regroup;
                     return true;
@@ -120,8 +136,14 @@ impl<R: Rng> Game<R> {
             Phase::Monster(MonsterPhase::ConfirmReroll) => self.execute_reroll(),
             Phase::Monster(MonsterPhase::ConfirmCombat) => self.execute_combat(),
             Phase::Loot(LootPhase::ConfirmLoot) => self.execute_loot(),
-            Phase::Loot(LootPhase::ConfirmGraveyard) => self.execute_graveyard(),
-            Phase::Dragon(DragonPhase::Confirm) => self.execute_dragon(),
+            Phase::Loot(LootPhase::ConfirmGraveyard) => {
+                self.execute_graveyard();
+                self.party.set_selection_limit(0);
+            }
+            Phase::Dragon(DragonPhase::Confirm) => {
+                self.execute_dragon();
+                self.party.set_selection_limit(0);
+            }
             _ => (),
         }
     }
@@ -145,7 +167,7 @@ impl<R: Rng> Game<R> {
             },
             Phase::Loot(ref lp) => match lp {
                 LootPhase::SelectAlly => {
-                    if self.current_ally() == &Ally::Scroll && !self.has_potion() {
+                    if self.current_ally() == &Ally::Scroll && self.potion_count() == 0 {
                         Phase::Loot(LootPhase::SelectAlly)
                     } else {
                         Phase::Loot(LootPhase::SelectLoot)
@@ -156,9 +178,9 @@ impl<R: Rng> Game<R> {
                     Monster::Potion => Phase::Loot(LootPhase::SelectGraveyard),
                     _ => Phase::Loot(LootPhase::SelectLoot),
                 },
-                LootPhase::ConfirmLoot => self.end_loot_phase(),
+                LootPhase::ConfirmLoot => Phase::Loot(LootPhase::SelectAlly),
                 LootPhase::SelectGraveyard => Phase::Loot(LootPhase::ConfirmGraveyard),
-                LootPhase::ConfirmGraveyard => self.end_loot_phase(),
+                LootPhase::ConfirmGraveyard => Phase::Loot(LootPhase::SelectAlly),
             },
             Phase::Dragon(DragonPhase::SelectAlly) => Phase::Dragon(DragonPhase::Confirm),
             Phase::Dragon(DragonPhase::Confirm) => Phase::Regroup,
@@ -179,7 +201,7 @@ impl<R: Rng> Game<R> {
                 MonsterPhase::ConfirmCombat => Phase::Monster(MonsterPhase::SelectMonster),
             },
             Phase::Loot(ref lp) => match lp {
-                LootPhase::SelectAlly => self.dragon_phase(),
+                LootPhase::SelectAlly => Phase::Dragon(DragonPhase::SelectAlly),
                 LootPhase::SelectLoot => Phase::Loot(LootPhase::SelectAlly),
                 LootPhase::ConfirmLoot => Phase::Loot(LootPhase::SelectLoot),
                 LootPhase::SelectGraveyard => Phase::Loot(LootPhase::SelectLoot),
@@ -188,5 +210,6 @@ impl<R: Rng> Game<R> {
             Phase::Dragon(_) => Phase::Dragon(DragonPhase::SelectAlly),
             _ => unreachable!(),
         };
+        while self.enter_phase_trigger() {}
     }
 }

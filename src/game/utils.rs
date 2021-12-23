@@ -55,8 +55,11 @@ impl<R: Rng> Game<R> {
         self.dungeon.iter().any(|m| m.is_loot())
     }
 
-    pub(super) fn has_potion(&self) -> bool {
-        self.dungeon.iter().any(|m| m == &Monster::Potion)
+    pub(super) fn potion_count(&self) -> usize {
+        self.dungeon
+            .iter()
+            .filter(|m| m == &&Monster::Potion)
+            .count()
     }
 
     pub(super) fn dragon_dice(&self) -> usize {
@@ -84,6 +87,7 @@ pub type Invariant<T> = fn(&Cursor<T>, usize, &T) -> bool;
 pub struct Cursor<T> {
     cursors: Vec<usize>,
     selection: HashSet<usize>,
+    selection_limit: usize,
     invariants: Vec<Invariant<T>>,
     data: Vec<T>,
 }
@@ -93,6 +97,7 @@ impl<T> Cursor<T> {
         let mut cursor = Self {
             cursors: vec![0, invariants.len()],
             selection: HashSet::new(),
+            selection_limit: 0,
             invariants,
             data,
         };
@@ -100,6 +105,10 @@ impl<T> Cursor<T> {
         cursor.canonicalize();
 
         cursor
+    }
+
+    pub fn set_selection_limit(&mut self, limit: usize) {
+        self.selection_limit = limit;
     }
 
     fn canonicalize(&mut self) {
@@ -210,7 +219,7 @@ impl<T> Cursor<T> {
         let index = self.cursor(c);
         if self.selection.contains(&index) {
             self.selection.remove(&index);
-        } else {
+        } else if self.selection_limit == 0 || self.selection.len() < self.selection_limit {
             self.selection.insert(index);
         }
     }
