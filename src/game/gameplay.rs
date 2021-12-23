@@ -11,7 +11,8 @@ impl<R: Rng> Game<R> {
         self.level += 1;
         self.dungeon.set_data(roll_n(&mut self.rng, self.level));
         if !self.has_monsters() {
-            self.phase = Phase::Loot(LootPhase::SelectAlly)
+            self.phase = Phase::Monster(MonsterPhase::ConfirmCombat);
+            self.next_phase();
         }
     }
 
@@ -116,6 +117,8 @@ impl<R: Rng> Game<R> {
             },
             Phase::Regroup => {
                 self.next_level();
+                self.dungeon.set_invariants(MON_DUNGEON_INV.to_vec());
+                self.party.set_invariants(MON_ALLY_INV.to_vec());
                 Phase::Monster(MonsterPhase::SelectAlly)
             }
             _ => unreachable!(),
