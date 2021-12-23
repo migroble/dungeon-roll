@@ -8,15 +8,13 @@ use rand::prelude::*;
 impl<R: Rng> Game<R> {
     pub(super) fn next_delve(&mut self) {
         self.delve += 1;
-        *self.party = roll_n(&mut self.rng, 7);
-        self.party.canonicalize();
+        self.party.set_data(roll_n(&mut self.rng, 7));
         self.next_level();
     }
 
     fn next_level(&mut self) {
         self.level += 1;
-        *self.dungeon = roll_n(&mut self.rng, self.level);
-        self.dungeon.canonicalize();
+        self.dungeon.set_data(roll_n(&mut self.rng, self.level));
         if !self.has_monsters() {
             self.phase = Phase::Loot(LootPhase::SelectAlly)
         }
@@ -28,7 +26,7 @@ impl<R: Rng> Game<R> {
 
     pub(super) fn affects_all(&self) -> bool {
         matches!(
-            (self.current_ally(), self.current_monster(),),
+            (self.current_ally(), self.current_monster()),
             (Ally::Fighter, Monster::Goblin)
                 | (Ally::Cleric, Monster::Skeleton)
                 | (Ally::Mage, Monster::Ooze)
@@ -63,7 +61,6 @@ impl<R: Rng> Game<R> {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => {
                     if self.current_ally() == &Ally::Scroll {
-                        self.party.set_cursor(1);
                         Phase::Monster(MonsterPhase::SelectReroll)
                     } else {
                         Phase::Monster(MonsterPhase::SelectMonster)
@@ -107,19 +104,13 @@ impl<R: Rng> Game<R> {
             }
             _ => unreachable!(),
         };
-
-        self.party.canonicalize();
-        self.dungeon.canonicalize();
     }
 
     pub(super) fn prev_phase(&mut self) {
         self.phase = match self.phase {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => Phase::Monster(MonsterPhase::SelectAlly),
-                MonsterPhase::SelectReroll => {
-                    self.party.set_cursor(0);
-                    Phase::Monster(MonsterPhase::SelectAlly)
-                }
+                MonsterPhase::SelectReroll => Phase::Monster(MonsterPhase::SelectAlly),
                 MonsterPhase::ConfirmReroll => Phase::Monster(MonsterPhase::SelectReroll),
                 MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::SelectAlly),
                 MonsterPhase::ConfirmCombat => Phase::Monster(MonsterPhase::SelectMonster),

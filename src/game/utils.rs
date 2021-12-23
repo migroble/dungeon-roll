@@ -1,9 +1,6 @@
 use crate::{dice::*, game::Game};
 use rand::prelude::*;
-use std::{
-    collections::HashSet,
-    ops::{Deref, DerefMut},
-};
+use std::{collections::HashSet, ops::Deref};
 
 pub fn roll<T: Dice, R: Rng>(rng: &mut R) -> T {
     T::nth(rng.gen_range(0..T::faces()))
@@ -27,18 +24,17 @@ impl<R: Rng> Game<R> {
     }
 
     pub(super) fn current_ally(&self) -> &Ally {
-        self.party.value(1)
+        self.party.value(0)
     }
 
     pub(super) fn current_ally_reroll(&self) -> &Ally {
-        self.party.value(0)
+        self.party.value(1)
     }
 }
 
 pub type Invariant<T> = fn(&Cursor<T>, usize, &T) -> bool;
 
 pub struct Cursor<T> {
-    curr_cursor: usize,
     cursors: Vec<usize>,
     invariants: Vec<Invariant<T>>,
     data: Vec<T>,
@@ -47,7 +43,6 @@ pub struct Cursor<T> {
 impl<T> Cursor<T> {
     pub fn new(data: Vec<T>, invariants: Vec<Invariant<T>>) -> Self {
         let mut cursor = Self {
-            curr_cursor: 0,
             cursors: vec![0, invariants.len()],
             invariants,
             data,
@@ -58,7 +53,7 @@ impl<T> Cursor<T> {
         cursor
     }
 
-    pub fn canonicalize(&mut self) {
+    fn canonicalize(&mut self) {
         if self.data.len() > 0 {
             for i in 0..self.invariants.len() {
                 let cursor = self.cursor(i);
@@ -94,21 +89,16 @@ impl<T> Cursor<T> {
             .map(|(i, _)| i)
     }
 
-    pub fn next(&mut self) {
-        if let Some(idx) = self.next_valid(self.curr_cursor, self.curr_index() + 1) {
-            *self.curr_index_mut() = idx;
+    pub fn next(&mut self, c: usize) {
+        if let Some(idx) = self.next_valid(c, self.cursor(c) + 1) {
+            self.cursors[c] = idx;
         }
     }
 
-    pub fn prev(&mut self) {
-        if let Some(idx) = self.prev_valid(self.curr_cursor, self.curr_index()) {
-            *self.curr_index_mut() = idx;
+    pub fn prev(&mut self, c: usize) {
+        if let Some(idx) = self.prev_valid(c, self.cursor(c)) {
+            self.cursors[c] = idx;
         }
-    }
-
-    pub fn set_cursor(&mut self, i: usize) {
-        assert!(i < self.cursors.len());
-        self.curr_cursor = i;
     }
 
     pub fn cursor(&self, c: usize) -> usize {
@@ -120,12 +110,20 @@ impl<T> Cursor<T> {
         &self.data[self.cursors[c]]
     }
 
-    fn curr_index(&self) -> usize {
-        self.cursors[self.curr_cursor]
+    pub fn set_data(&mut self, data: Vec<T>) {
+        self.data = data;
+        self.canonicalize();
     }
 
-    fn curr_index_mut(&mut self) -> &mut usize {
-        &mut self.cursors[self.curr_cursor]
+    pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
+        self.data.retain(f);
+        self.canonicalize();
+    }
+
+    pub fn remove(&mut self, i: usize) -> T {
+        let ret = self.data.remove(i);
+        self.canonicalize();
+        ret
     }
 }
 
@@ -134,12 +132,6 @@ impl<T> Deref for Cursor<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.data
-    }
-}
-
-impl<T> DerefMut for Cursor<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.data
     }
 }
 

@@ -25,20 +25,22 @@ impl<R: Rng> Game<R> {
 
     fn select_next(&mut self) {
         match self.phase {
-            Phase::Monster(MonsterPhase::SelectAlly)
-            | Phase::Loot(LootPhase::SelectAlly)
-            | Phase::Monster(MonsterPhase::SelectReroll) => self.party.next(),
-            Phase::Monster(MonsterPhase::SelectMonster) => self.dungeon.next(),
+            Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
+                self.party.next(0)
+            }
+            Phase::Monster(MonsterPhase::SelectReroll) => self.party.next(1),
+            Phase::Monster(MonsterPhase::SelectMonster) => self.dungeon.next(0),
             _ => (),
         };
     }
 
     fn select_prev(&mut self) {
         match self.phase {
-            Phase::Monster(MonsterPhase::SelectAlly)
-            | Phase::Loot(LootPhase::SelectAlly)
-            | Phase::Monster(MonsterPhase::SelectReroll) => self.party.prev(),
-            Phase::Monster(MonsterPhase::SelectMonster) => self.dungeon.prev(),
+            Phase::Monster(MonsterPhase::SelectAlly) | Phase::Loot(LootPhase::SelectAlly) => {
+                self.party.prev(0)
+            }
+            Phase::Monster(MonsterPhase::SelectReroll) => self.party.prev(1),
+            Phase::Monster(MonsterPhase::SelectMonster) => self.dungeon.prev(0),
             _ => (),
         };
     }
