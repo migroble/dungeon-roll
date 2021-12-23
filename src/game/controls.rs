@@ -7,18 +7,19 @@ impl<R: Rng> Game<R> {
             match (kc.code, &self.phase) {
                 (KeyCode::Right, _) => self.select_next(),
                 (KeyCode::Left, _) => self.select_prev(),
+                (KeyCode::Enter, _) => self.next_phase(),
+                (KeyCode::Esc, _) => self.prev_phase(),
+                (KeyCode::Char('q'), _) => return true,
                 (KeyCode::Up, Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally))) => {
                     self.select_top()
                 }
                 (KeyCode::Down, Phase::Monster(MonsterPhase::SelectReroll(Reroll::Monster))) => {
                     self.select_bottom()
                 }
-                (KeyCode::Char(' '), Phase::Monster(MonsterPhase::SelectReroll(_))) => {
-                    self.toggle_select()
-                }
-                (KeyCode::Enter, _) => self.next_phase(),
-                (KeyCode::Backspace, _) => self.prev_phase(),
-                (KeyCode::Esc, _) => return true,
+                (
+                    KeyCode::Char(' '),
+                    Phase::Monster(MonsterPhase::SelectReroll(_)) | Phase::Dragon,
+                ) => self.toggle_select(),
                 _ => return false,
             }
         }
