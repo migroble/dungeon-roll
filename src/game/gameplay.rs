@@ -56,12 +56,12 @@ impl<R: Rng> Game<R> {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => {
                     if self.current_ally() == &Ally::Scroll {
-                        Phase::Monster(MonsterPhase::SelectReroll)
+                        Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally))
                     } else {
                         Phase::Monster(MonsterPhase::SelectMonster)
                     }
                 }
-                MonsterPhase::SelectReroll => Phase::Monster(MonsterPhase::ConfirmReroll),
+                MonsterPhase::SelectReroll(_) => Phase::Monster(MonsterPhase::ConfirmReroll),
                 MonsterPhase::ConfirmReroll => {
                     self.execute_reroll();
                     Phase::Monster(MonsterPhase::SelectAlly)
@@ -105,8 +105,10 @@ impl<R: Rng> Game<R> {
         self.phase = match self.phase {
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectAlly => Phase::Monster(MonsterPhase::SelectAlly),
-                MonsterPhase::SelectReroll => Phase::Monster(MonsterPhase::SelectAlly),
-                MonsterPhase::ConfirmReroll => Phase::Monster(MonsterPhase::SelectReroll),
+                MonsterPhase::SelectReroll(_) => Phase::Monster(MonsterPhase::SelectAlly),
+                MonsterPhase::ConfirmReroll => {
+                    Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally))
+                }
                 MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::SelectAlly),
                 MonsterPhase::ConfirmCombat => Phase::Monster(MonsterPhase::SelectMonster),
             },

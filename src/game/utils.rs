@@ -35,6 +35,7 @@ pub type Invariant<T> = fn(&Cursor<T>, usize, &T) -> bool;
 
 pub struct Cursor<T> {
     cursors: Vec<usize>,
+    selection: HashSet<usize>,
     invariants: Vec<Invariant<T>>,
     data: Vec<T>,
 }
@@ -43,6 +44,7 @@ impl<T> Cursor<T> {
     pub fn new(data: Vec<T>, invariants: Vec<Invariant<T>>) -> Self {
         let mut cursor = Self {
             cursors: vec![0, invariants.len()],
+            selection: HashSet::new(),
             invariants,
             data,
         };
@@ -124,6 +126,24 @@ impl<T> Cursor<T> {
         self.canonicalize();
         ret
     }
+
+    pub fn clear_selection(&mut self) {
+        self.selection.clear();
+    }
+
+    pub fn toggle_select(&mut self, c: usize) {
+        assert!(c < self.cursors.len());
+        let index = self.cursor(c);
+        if self.selection.contains(&index) {
+            self.selection.remove(&index);
+        } else {
+            self.selection.insert(index);
+        }
+    }
+
+    pub fn is_selected(&self, i: usize) -> bool {
+        self.selection.contains(&i)
+    }
 }
 
 impl<T> Deref for Cursor<T> {
@@ -131,50 +151,5 @@ impl<T> Deref for Cursor<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.data
-    }
-}
-
-enum SelectedRow {
-    Top,
-    Bottom,
-}
-
-impl Default for SelectedRow {
-    fn default() -> Self {
-        Self::Bottom
-    }
-}
-
-#[derive(Default)]
-pub struct Selection {
-    selected: SelectedRow,
-    top: HashSet<usize>,
-    bottom: HashSet<usize>,
-    top_cursor: usize,
-    bottom_cursor: usize,
-}
-
-impl Selection {
-    pub fn is_selected_top(&self, i: usize) -> bool {
-        self.top.contains(&i)
-    }
-
-    pub fn is_selected_bottom(&self, i: usize) -> bool {
-        self.bottom.contains(&i)
-    }
-
-    pub fn select_top(&mut self, i: usize) {
-        self.selected = SelectedRow::Top;
-    }
-
-    pub fn select_bottom(&mut self, i: usize) {
-        self.selected = SelectedRow::Bottom;
-    }
-
-    pub fn move_cursor(&mut self, i: usize) {
-        match self.selected {
-            SelectedRow::Top => self.top_cursor = i,
-            SelectedRow::Bottom => self.bottom_cursor = i,
-        }
     }
 }

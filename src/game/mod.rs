@@ -1,6 +1,5 @@
 use crate::{dice::*, hero::*, phase::*, treasure::*};
 use rand::prelude::*;
-use std::collections::HashSet;
 
 mod controls;
 mod gameplay;
@@ -21,8 +20,6 @@ pub struct Game<R: Rng> {
     graveyard: Vec<Ally>,
     treasure: Vec<Treasure>,
     inventory: Vec<Treasure>,
-    selection_row: usize,
-    selection: [HashSet<usize>; 2],
 }
 
 #[derive(Copy, Clone)]
@@ -39,8 +36,8 @@ enum DungeonCursor {
 
 lazy_static! {
     static ref MP_ALLY_INVARIANTS: Vec<Invariant<Ally>> = vec![
-        |_, _, _| true,             // ally cursor
-        |c, i, _| i != c.cursor(0), // reroll ally cursor
+        |_, _, _| true,                                      // ally cursor
+        |c, i, _| i != c.cursor(PartyCursor::Ally as usize), // reroll ally cursor
     ];
     static ref MP_MONSTER_INVARIANTS: Vec<Invariant<Monster>> = vec![
         |_, _, t| t.is_monster(),        // monster cursor
@@ -62,8 +59,6 @@ impl<R: Rng> Game<R> {
             dungeon: Cursor::new(Vec::new(), MP_MONSTER_INVARIANTS.to_vec()),
             treasure: TREASURE.clone(),
             inventory: Vec::new(),
-            selection_row: 0,
-            selection: Default::default(),
         }
     }
 

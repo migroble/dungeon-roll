@@ -1,10 +1,25 @@
 #[derive(Debug, PartialEq, Eq)]
+pub enum Phase {
+    Setup,
+    Monster(MonsterPhase),
+    Loot(LootPhase),
+    Dragon,
+    Regroup,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum MonsterPhase {
     SelectAlly,
-    SelectReroll,
+    SelectReroll(Reroll),
     ConfirmReroll,
     SelectMonster,
     ConfirmCombat,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Reroll {
+    Ally,
+    Monster,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -14,13 +29,4 @@ pub enum LootPhase {
     ConfirmLoot,
     SelectGraveyard,
     ConfirmGraveyard,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Phase {
-    Setup,
-    Monster(MonsterPhase),
-    Loot(LootPhase),
-    Dragon,
-    Regroup,
 }
