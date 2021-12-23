@@ -46,9 +46,17 @@ impl<R: Rng> Game<R> {
     }
 
     fn execute_reroll(&mut self) {
-        // TODO: re-do this
-        // self.party[self.reroll_ally_cursor] = roll(&mut self.rng);
-        // self.party.remove(self.ally_cursor);
+        self.party
+            .selection()
+            .iter()
+            .for_each(|s| self.party.set_value(*s, roll(&mut self.rng)));
+        self.party.clear_selection();
+
+        self.dungeon
+            .selection()
+            .iter()
+            .for_each(|s| self.dungeon.set_value(*s, roll(&mut self.rng)));
+        self.dungeon.clear_selection();
     }
 
     pub(super) fn next_phase(&mut self) {
@@ -64,7 +72,11 @@ impl<R: Rng> Game<R> {
                 MonsterPhase::SelectReroll(_) => Phase::Monster(MonsterPhase::ConfirmReroll),
                 MonsterPhase::ConfirmReroll => {
                     self.execute_reroll();
-                    Phase::Monster(MonsterPhase::SelectAlly)
+                    if self.has_monsters() {
+                        Phase::Monster(MonsterPhase::SelectAlly)
+                    } else {
+                        Phase::Loot(LootPhase::SelectAlly)
+                    }
                 }
                 MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::ConfirmCombat),
                 MonsterPhase::ConfirmCombat => {

@@ -116,6 +116,11 @@ impl<T> Cursor<T> {
         self.canonicalize();
     }
 
+    pub fn set_value(&mut self, index: usize, value: T) {
+        assert!(index < self.data.len());
+        self.data[index] = value;
+    }
+
     pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
         self.data.retain(f);
         self.canonicalize();
@@ -125,6 +130,10 @@ impl<T> Cursor<T> {
         let ret = self.data.remove(i);
         self.canonicalize();
         ret
+    }
+
+    pub fn selection(&self) -> Vec<usize> {
+        self.selection.iter().copied().collect()
     }
 
     pub fn clear_selection(&mut self) {

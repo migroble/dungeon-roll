@@ -59,6 +59,9 @@ impl<R: Rng> Game<R> {
                     MonsterPhase::SelectReroll(_) if self.dungeon.is_selected(i) => {
                         style.bg(Color::DarkGray)
                     }
+                    MonsterPhase::ConfirmReroll if self.dungeon.is_selected(i) => {
+                        style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
+                    }
                     MonsterPhase::ConfirmCombat if is_affected(i) => {
                         style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                     }
@@ -105,7 +108,7 @@ impl<R: Rng> Game<R> {
                     MonsterPhase::SelectReroll(_) if self.party.is_selected(i) => {
                         style.bg(Color::DarkGray)
                     }
-                    MonsterPhase::ConfirmReroll if is_reroll_selected(i) => {
+                    MonsterPhase::ConfirmReroll if self.party.is_selected(i) => {
                         style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                     }
                     _ if subphase != &MonsterPhase::SelectAlly && is_selected(i) => {
