@@ -28,11 +28,11 @@ pub struct Game<R: Rng> {
 lazy_static! {
     static ref MP_ALLY_INVARIANTS: Vec<Invariant<Ally>> = vec![
         |_, _, _| true,             // ally cursor
-        |c, i, t| i != c.cursor(0), // reroll ally cursor
+        |c, i, _| i != c.cursor(0), // reroll ally cursor
     ];
     static ref MP_MONSTER_INVARIANTS: Vec<Invariant<Monster>> = vec![
-        |c, i, t| t.is_monster(),        // monster cursor
-        |c, i, t| t != &Monster::Dragon, // reroll monster cursor
+        |_, _, t| t.is_monster(),        // monster cursor
+        |_, _, t| t != &Monster::Dragon, // reroll monster cursor
     ];
 }
 
