@@ -17,9 +17,11 @@ pub fn indexes_of<T: PartialEq>(items: &[T], key: &T) -> Vec<usize> {
         .collect()
 }
 
+#[derive(PartialEq)]
 pub enum Row {
     Party,
     Dungeon,
+    Graveyard,
 }
 
 impl<R: Rng> Game<R> {
@@ -40,6 +42,7 @@ impl<R: Rng> Game<R> {
             Phase::Monster(MonsterPhase::SelectAlly | MonsterPhase::SelectReroll(Reroll::Ally))
             | Phase::Loot(LootPhase::SelectAlly)
             | Phase::Dragon(DragonPhase::SelectAlly) => Some(Row::Party),
+            Phase::Loot(LootPhase::SelectGraveyard) => Some(Row::Graveyard),
             _ => None,
         }
     }
@@ -49,9 +52,18 @@ impl<R: Rng> Game<R> {
     }
 
     pub(super) fn has_loot(&self) -> bool {
+        self.dungeon.iter().any(|m| m.is_loot())
+    }
+
+    pub(super) fn has_potion(&self) -> bool {
+        self.dungeon.iter().any(|m| m == &Monster::Potion)
+    }
+
+    pub(super) fn dragon_dice(&self) -> usize {
         self.dungeon
             .iter()
-            .any(|m| !m.is_monster() && m != &Monster::Dragon)
+            .filter(|m| m == &&Monster::Dragon)
+            .count()
     }
 
     pub(super) fn affects_all(&self) -> bool {
@@ -168,6 +180,10 @@ impl<T> Cursor<T> {
     pub fn set_value(&mut self, index: usize, value: T) {
         assert!(index < self.data.len());
         self.data[index] = value;
+    }
+
+    pub fn push(&mut self, value: T) {
+        self.data.push(value);
     }
 
     pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {

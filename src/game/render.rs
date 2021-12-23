@@ -68,6 +68,7 @@ impl<R: Rng> Game<R> {
                 controls.append(&mut vec!["Enter: Confirm", "Esc: Back"])
             }
             Phase::Regroup => (),
+            _ => unreachable!(),
         }
         controls.push("Q: Exit");
 
@@ -120,23 +121,40 @@ impl<R: Rng> Game<R> {
         &self,
         f: &mut Frame<B>,
         area: Rect,
+        row: Row,
+        name: &'static str,
         data: &[T],
         style_fn: fn(&Game<R>, usize) -> Style,
     ) {
+        let border = if Some(row) == self.selected_row() {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
+        };
+
+        let array_area = draw_block(
+            f,
+            Block::default()
+                .title(name)
+                .border_type(border)
+                .borders(Borders::ALL),
+            area,
+        );
+
         let row = Layout::default()
             .direction(Direction::Horizontal)
-            .margin(1)
             .constraints(
                 repeat(Constraint::Ratio(1, data.len() as u32))
                     .take(data.len())
                     .collect::<Vec<_>>(),
             )
-            .split(area);
+            .split(array_area);
 
         row.iter().zip(data).enumerate().for_each(|(i, (col, t))| {
             let style = style_fn(self, i);
             let mut sprite = t.render();
             sprite.patch_style(style);
+
             let r = vertical_center(*col, 1);
             f.render_widget(Paragraph::new(sprite).alignment(Alignment::Center), r)
         });
@@ -157,56 +175,47 @@ impl<R: Rng> Game<R> {
         f.render_widget(Paragraph::new(DRAGON), dragon_area);
     }
 
-    fn render_dungeon<B: Backend, S: Styler>(&self, f: &mut Frame<B>, area: Rect) {
-        let dungeon_border = if let Some(Row::Dungeon) = self.selected_row() {
-            BorderType::Thick
-        } else {
-            BorderType::Plain
-        };
-
-        let dungeon_area = draw_block(
-            f,
-            Block::default()
-                .title(" Dungeon ")
-                .border_type(dungeon_border)
-                .borders(Borders::ALL),
-            area,
-        );
-
-        self.render_array(f, dungeon_area, &*self.dungeon, S::dungeon_style);
-    }
-
-    fn render_party<B: Backend, S: Styler>(&self, f: &mut Frame<B>, area: Rect) {
-        let party_border = if let Some(Row::Party) = self.selected_row() {
-            BorderType::Thick
-        } else {
-            BorderType::Plain
-        };
-
-        let party_area = draw_block(
-            f,
-            Block::default()
-                .title(" Party ")
-                .border_type(party_border)
-                .borders(Borders::ALL),
-            area,
-        );
-
-        self.render_array(f, party_area, &*self.party, S::party_style);
-    }
-
     fn render_playfield<B: Backend, S: Styler>(&self, f: &mut Frame<B>, area: Rect) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)].as_ref())
+            .constraints(
+                [
+                    Constraint::Ratio(2, 5),
+                    Constraint::Ratio(2, 5),
+                    Constraint::Ratio(1, 5),
+                ]
+                .as_ref(),
+            )
             .split(area);
 
         match self.phase {
             Phase::Dragon(_) => self.render_dragon(f, chunks[0]),
             Phase::Regroup => (),
-            _ => self.render_dungeon::<B, S>(f, chunks[0]),
+            _ => self.render_array(
+                f,
+                chunks[0],
+                Row::Dungeon,
+                " Dungeon ",
+                &*self.dungeon,
+                S::dungeon_style,
+            ),
         }
-        self.render_party::<B, S>(f, chunks[1]);
+        self.render_array(
+            f,
+            chunks[1],
+            Row::Party,
+            " Party ",
+            &*self.party,
+            S::party_style,
+        );
+        self.render_array(
+            f,
+            chunks[2],
+            Row::Graveyard,
+            " Graveyard ",
+            &self.graveyard,
+            |_, _| Style::default(),
+        );
     }
 
     pub fn render<'a, B: Backend>(
@@ -214,6 +223,10 @@ impl<R: Rng> Game<R> {
         terminal: &'a mut Terminal<B>,
     ) -> Result<CompletedFrame<'a>, io::Error> {
         terminal.draw(|f| {
+            if self.phase == Phase::Setup {
+                return;
+            }
+
             let game = draw_block(f, Block::default().borders(Borders::ALL), f.size());
 
             let layout = Layout::default()
@@ -225,11 +238,7 @@ impl<R: Rng> Game<R> {
             let sublayout = Layout::default()
                 .direction(Direction::Horizontal)
                 .margin(1)
-                .constraints([
-                    Constraint::Percentage(60),
-                    Constraint::Percentage(40),
-                    // Constraint::Percentage(20),
-                ])
+                .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
                 .split(layout[0]);
 
             let info = sublayout[1];
@@ -239,14 +248,12 @@ impl<R: Rng> Game<R> {
                 info,
             );
 
-            // let graveyard = sublayout[2];
-
             let playfield = sublayout[0];
             match &self.phase {
                 Phase::Monster(_) => self.render_playfield::<_, MPStyler>(f, playfield),
                 Phase::Loot(_) => self.render_playfield::<_, LPStyler>(f, playfield),
                 Phase::Dragon(_) => self.render_playfield::<_, DPStyler>(f, playfield),
-                _ => unreachable!(),
+                _ => (),
             };
 
             let controls = layout[1];

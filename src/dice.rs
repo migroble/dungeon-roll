@@ -62,4 +62,8 @@ impl Monster {
     pub fn is_monster(&self) -> bool {
         matches!(self, Monster::Goblin | Monster::Skeleton | Monster::Ooze)
     }
+
+    pub fn is_loot(&self) -> bool {
+        matches!(self, Monster::Chest | Monster::Potion)
+    }
 }
