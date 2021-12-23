@@ -77,7 +77,9 @@ impl<T> Cursor<T> {
                         .prev_valid(i, self.data.len())
                         .unwrap_or(self.data.len() - 1);
                 } else if !self.invariants[i](self, cursor, self.value(i)) {
-                    self.cursors[i] = self.next_valid(i, 0).unwrap_or(0);
+                    self.cursors[i] = self
+                        .next_valid(i, 0)
+                        .unwrap_or(self.prev_valid(i, self.data.len()).unwrap_or(0));
                 }
             }
         }
