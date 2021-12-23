@@ -108,7 +108,10 @@ impl<T> Cursor<T> {
     }
 
     fn next_valid(&self, index: usize, skip: usize) -> Option<usize> {
-        assert!(index < self.invariants.len());
+        if index >= self.invariants.len() {
+            return None;
+        }
+
         self.data
             .iter()
             .enumerate()
@@ -118,7 +121,10 @@ impl<T> Cursor<T> {
     }
 
     fn prev_valid(&self, index: usize, skip: usize) -> Option<usize> {
-        assert!(index < self.invariants.len());
+        if index >= self.invariants.len() {
+            return None;
+        }
+
         self.data
             .iter()
             .enumerate()

@@ -49,17 +49,14 @@ lazy_static! {
         |c, i, _| i != c.cursor(PartyCursor::Ally as usize), // reroll ally cursor
     ];
     static ref LOOT_DUNGEON_INV: Vec<Invariant<Monster>> = vec![
-        |_, _, t| t != &Monster::Dragon,
-        |_, _, _| false,
+        |_, _, t| t != &Monster::Dragon, // monster cursor
     ];
     // scrolls cant open chests
     static ref LOOT_SCROLL_DUNGEON_INV: Vec<Invariant<Monster>> = vec![
-        |_, _, t| t != &Monster::Chest && t != &Monster::Dragon,
-        |_, _, _| false,
+        |_, _, t| t != &Monster::Chest && t != &Monster::Dragon, // monster cursor
     ];
     static ref DRAGON_ALLY_INV: Vec<Invariant<Ally>> = vec![
         |_, _, t| t != &Ally::Scroll, // ally cursor
-        |_, _, _| false,              // reroll ally cursor
     ];
 }
 
