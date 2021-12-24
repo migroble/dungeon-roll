@@ -5,6 +5,8 @@ pub enum Phase {
     Loot(Loot),
     Dragon(Dragon),
     Regroup,
+    Defeat,
+    Victory,
 }
 
 #[allow(clippy::enum_variant_names)]

@@ -208,6 +208,8 @@ impl<R: Rng> Game<R> {
                 }
             }
             Phase::Dragon(DragonPhase::Confirm) => Phase::Regroup,
+            Phase::Defeat => Phase::Defeat,
+            Phase::Victory => Phase::Victory,
         };
         while self.enter_phase_trigger() {}
     }

@@ -36,6 +36,10 @@ impl<R: Rng> Game<R> {
         self.party.value(PartyCursor::Ally as usize)
     }
 
+    pub(super) fn current_graveyard(&self) -> &Ally {
+        self.graveyard.value(0)
+    }
+
     pub(super) fn selected_row(&self) -> Option<Row> {
         match self.phase {
             Phase::Monster(

@@ -1,6 +1,6 @@
 use super::{
-    indexes_of, DragonPhase, DungeonCursor, Game, LootPhase, MonsterPhase, PartyCursor, Phase,
-    Render, Reroll, Rng, Row,
+    indexes_of, Ally, DragonPhase, DungeonCursor, Game, LootPhase, Monster, MonsterPhase,
+    PartyCursor, Phase, Render, Reroll, Rng, Row,
 };
 use std::{io, iter::repeat, ops::ControlFlow};
 use tui::layout::Rect;
@@ -9,35 +9,43 @@ use tui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     terminal::{CompletedFrame, Frame},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    text::{Span, Spans, Text},
+    widgets::{Block, BorderType, Borders, Paragraph, Wrap},
     Terminal,
 };
 
 static DRAGON: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/dragon.txt"));
 
+lazy_static! {
+    static ref TITLE_STYLE: Style =
+        Style::default().add_modifier(Modifier::UNDERLINED | Modifier::BOLD);
+}
+
 fn vertical_center(area: Rect, height: u16) -> Rect {
     if area.height > 0 {
         Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![
-                Constraint::Length(area.height.saturating_sub(height) / 2),
-                Constraint::Length(height),
-                Constraint::Percentage(100),
-            ])
+            .constraints(
+                [
+                    Constraint::Length(area.height.saturating_sub(height) / 2),
+                    Constraint::Percentage(100),
+                ]
+                .as_ref(),
+            )
             .split(area)[1]
     } else {
         area
     }
 }
 
-fn draw_block<B: Backend>(f: &mut Frame<B>, block: Block, area: Rect) -> Rect {
+fn render_block<B: Backend>(f: &mut Frame<B>, block: Block, area: Rect) -> Rect {
     let inner = block.inner(area);
     f.render_widget(block, area);
     inner
 }
 
 fn render_dragon<B: Backend>(f: &mut Frame<B>, area: Rect) {
-    let display_area = draw_block(
+    let display_area = render_block(
         f,
         Block::default().title(" Dungeon ").borders(Borders::ALL),
         area,
@@ -58,7 +66,7 @@ fn render_list<B: Backend>(
     data: Vec<&str>,
     rows: usize,
 ) {
-    let text_area = draw_block(f, block, area);
+    let text_area = render_block(f, block, area);
     let columns = (data.len() + 1) / rows;
     let column = Layout::default()
         .direction(Direction::Vertical)
@@ -100,6 +108,122 @@ fn render_list<B: Backend>(
 }
 
 impl<R: Rng> Game<R> {
+    fn render_info<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
+        let info_area = render_block(
+            f,
+            Block::default().title(" Info ").borders(Borders::ALL),
+            area,
+        );
+
+        let chunks = Layout::default()
+            .vertical_margin(1)
+            .horizontal_margin(2)
+            .constraints(
+                [
+                    Constraint::Ratio(1, 4),
+                    Constraint::Ratio(1, 4),
+                    Constraint::Ratio(1, 4),
+                    Constraint::Ratio(1, 4),
+                ]
+                .as_ref(),
+            )
+            .split(info_area);
+
+        let phase_info = match self.phase {
+            Phase::Monster(ref mp) => {
+                let mut lines = vec![
+                    Spans::from(Span::styled("Monster Phase", *TITLE_STYLE)),
+                    Spans::from(""),
+                ];
+
+                let mut extra = match mp {
+                    MonsterPhase::SelectAlly => vec![
+                        Spans::from(vec![
+                            Span::raw("A. Use a "),
+                            Span::styled("Scroll", Ally::Scroll.style()),
+                            Span::raw(" to re-roll dice"),
+                        ]),
+                        Spans::from(""),
+                        Spans::from("B. Use a Companion to defeat one or more Monsters"),
+                    ],
+                    MonsterPhase::SelectMonster => vec![Spans::from("Select a Monster to fight")],
+                    MonsterPhase::ConfirmCombat => vec![Spans::from("Confirm the combat")],
+                    MonsterPhase::SelectReroll(_) => vec![Spans::from("Select dice to re-roll")],
+                    MonsterPhase::ConfirmReroll => vec![Spans::from("Confirm the re-roll")],
+                };
+
+                lines.append(&mut extra);
+                Text::from(lines)
+            }
+            Phase::Loot(ref lp) => {
+                let mut lines = vec![
+                    Spans::from(Span::styled("Loot Phase", *TITLE_STYLE)),
+                    Spans::from(""),
+                ];
+
+                let mut extra = match lp {
+                    LootPhase::SelectAlly => vec![
+                        Spans::from(vec![
+                            Span::raw("A. Open "),
+                            Span::styled("Chests", Monster::Chest.style()),
+                        ]),
+                        Spans::from(""),
+                        Spans::from(vec![
+                            Span::raw("A. Quaff "),
+                            Span::styled("Potions", Monster::Potion.style()),
+                        ]),
+                    ],
+                    _ => vec![Spans::from("")],
+                };
+
+                lines.append(&mut extra);
+                Text::from(lines)
+            }
+            _ => Text::from(""),
+        };
+
+        f.render_widget(
+            Paragraph::new(phase_info).wrap(Wrap { trim: true }),
+            chunks[0],
+        );
+
+        f.render_widget(
+            Paragraph::new(Spans::from(vec![
+                Span::raw("If there are three or more "),
+                Span::styled("Dragon", Monster::Dragon.style()),
+                Span::raw(" dice, the "),
+                Span::styled("Dragon", Monster::Dragon.style()),
+                Span::raw(" notice your presence and attack"),
+            ]))
+            .wrap(Wrap { trim: true }),
+            vertical_center(chunks[1], 2),
+        );
+
+        let character_info = match self.selected_row() {
+            Some(Row::Dungeon) => self.current_monster().combat_info(),
+            Some(Row::Party) => self.current_ally().combat_info(),
+            Some(Row::Graveyard) => self.current_graveyard().combat_info(),
+            None => Spans::from(""),
+        };
+
+        let character_flavor = match self.selected_row() {
+            Some(Row::Dungeon) => self.current_monster().flavor_text(),
+            Some(Row::Party) => self.current_ally().flavor_text(),
+            Some(Row::Graveyard) => self.current_graveyard().flavor_text(),
+            None => Spans::from(""),
+        };
+
+        f.render_widget(
+            Paragraph::new(character_info).wrap(Wrap { trim: true }),
+            vertical_center(chunks[2], 0),
+        );
+
+        f.render_widget(
+            Paragraph::new(character_flavor).wrap(Wrap { trim: true }),
+            vertical_center(chunks[3], 0),
+        );
+    }
+
     #[allow(clippy::non_ascii_literal)]
     fn render_controls<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
         let mut controls = vec!["→: Next", "←: Previous"];
@@ -158,7 +282,7 @@ impl<R: Rng> Game<R> {
             BorderType::Plain
         };
 
-        let array_area = draw_block(
+        let array_area = render_block(
             f,
             Block::default()
                 .title(name)
@@ -253,7 +377,7 @@ impl<R: Rng> Game<R> {
                 return;
             }
 
-            let game = draw_block(f, Block::default().borders(Borders::ALL), f.size());
+            let game = render_block(f, Block::default().borders(Borders::ALL), f.size());
 
             let layout = Layout::default()
                 .direction(Direction::Vertical)
@@ -268,11 +392,7 @@ impl<R: Rng> Game<R> {
                 .split(layout[0]);
 
             let info = sublayout[1];
-            draw_block(
-                f,
-                Block::default().title(" Info ").borders(Borders::ALL),
-                info,
-            );
+            self.render_info(f, info);
 
             let playfield = sublayout[0];
             match &self.phase {
