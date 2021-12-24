@@ -12,8 +12,6 @@ impl<R: Rng> Game<R> {
         self.delve += 1;
         self.level = 0;
         self.run_xp = 0;
-        self.loot_count = 0;
-        self.combat_count = 0;
         self.party_size = ((1. + 1.5 * (self.hero.xp() as f64 + 4.).sqrt()) as u64).min(7);
         self.phase = Phase::Setup;
         self.party.set_data(roll_n(&mut self.rng, self.party_size));
@@ -26,6 +24,8 @@ impl<R: Rng> Game<R> {
     fn next_level(&mut self) {
         self.level += 1;
         self.run_xp += self.level;
+        self.loot_count = 0;
+        self.combat_count = 0;
         self.dungeon.retain(|m| m == &Monster::Dragon);
         let dungeon_size = self.dungeon.len() as u64;
         self.dungeon.append(roll_n(
