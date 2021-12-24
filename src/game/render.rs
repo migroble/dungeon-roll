@@ -130,6 +130,18 @@ fn phase_info(phase: &Phase) -> Text {
                 MonsterPhase::ConfirmCombat => vec![Spans::from("Confirm the combat")],
                 MonsterPhase::SelectReroll(_) => vec![Spans::from("Select dice to re-roll")],
                 MonsterPhase::ConfirmReroll => vec![Spans::from("Confirm the re-roll")],
+                MonsterPhase::Defeat => {
+                    lines = vec![
+                        Spans::from(Span::styled("Defeat!", *TITLE_STYLE)),
+                        Spans::from(""),
+                    ];
+
+                    vec![
+                        Spans::from("The Monsters in this dungeon proved far too strong for the adventurers"),
+                        Spans::from(""),
+                        Spans::from("Next expedition will require more wary decision-making or simply more luck"),
+                    ]
+                }
             };
 
             lines.append(&mut extra);
@@ -159,6 +171,19 @@ fn phase_info(phase: &Phase) -> Text {
             lines.append(&mut extra);
             Text::from(lines)
         }
+        Phase::Dragon(DragonPhase::Defeat) => Text::from(vec![
+            Spans::from(Span::styled("Defeat!", *TITLE_STYLE)),
+            Spans::from(""),
+            Spans::from(vec![
+                Span::raw("The mighty "),
+                Span::styled("Dragon", Monster::Dragon.style()),
+                Span::raw(" has defended its dungeon once again"),
+            ]),
+            Spans::from(""),
+            Spans::from(
+                "Next expedition will require more wary decision-making or simply more luck",
+            ),
+        ]),
         Phase::Dragon(_) => Text::from(vec![
             Spans::from(Span::styled("Dragon Phase", *TITLE_STYLE)),
             Spans::from(""),
@@ -231,10 +256,15 @@ impl<R: Rng> Game<R> {
             chunks[0],
         );
 
-        let character_info = match self.selected_row() {
-            Some(Row::Dungeon) if !self.dungeon.is_empty() => self.current_monster().combat_info(),
-            Some(Row::Party) if !self.party.is_empty() => self.current_ally().combat_info(),
-            Some(Row::Graveyard) if !self.graveyard.is_empty() => {
+        let character_info = match (self.selected_row(), &self.phase) {
+            (Some(Row::Dungeon), _) if !self.dungeon.is_empty() => {
+                self.current_monster().combat_info()
+            }
+            (Some(Row::Party), Phase::Loot(_)) if !self.party.is_empty() => {
+                self.current_ally().loot_info()
+            }
+            (Some(Row::Party), _) if !self.party.is_empty() => self.current_ally().combat_info(),
+            (Some(Row::Graveyard), _) if !self.graveyard.is_empty() => {
                 self.current_graveyard().combat_info()
             }
             _ => Spans::from(""),
@@ -264,6 +294,9 @@ impl<R: Rng> Game<R> {
     fn render_controls<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
         let mut controls = vec!["→: Next", "←: Previous"];
         match self.phase {
+            Phase::Monster(MonsterPhase::Defeat) | Phase::Dragon(DragonPhase::Defeat) => {
+                controls.append(&mut vec!["Enter: Next delve"]);
+            }
             Phase::Monster(ref mp) => match mp {
                 MonsterPhase::SelectReroll(Reroll::Ally) => controls.append(&mut vec![
                     "↑: Dungeon row",
@@ -629,7 +662,7 @@ impl Styler for LPStyler {
         match game.phase {
             Phase::Loot(ref lp) => match lp {
                 LootPhase::SelectAlly if game.blink && is_selected(i) => style.bg(Color::White),
-                LootPhase::ConfirmLoot if game.party.is_selected(i) => {
+                LootPhase::ConfirmLoot if is_selected(i) => {
                     style.bg(Color::DarkGray).add_modifier(Modifier::DIM)
                 }
                 LootPhase::SelectGraveyard if is_selected(i) => style.bg(Color::DarkGray),

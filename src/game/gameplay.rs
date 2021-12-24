@@ -13,7 +13,9 @@ impl<R: Rng> Game<R> {
         self.level = 0;
         self.run_xp = 0;
         self.no_monsters = false;
-        self.party_size = (1. + 1.5 * (self.hero.xp() as f64 + 4.).sqrt()) as u64;
+        self.no_chests = false;
+        self.no_loot = false;
+        self.party_size = ((1. + 1.5 * (self.hero.xp() as f64 + 4.).sqrt()) as u64).min(7);
         self.phase = Phase::Setup;
         self.party.set_data(roll_n(&mut self.rng, self.party_size));
         self.graveyard.set_data(Vec::new());
@@ -26,8 +28,14 @@ impl<R: Rng> Game<R> {
         self.level += 1;
         self.run_xp += self.level;
         self.dungeon.retain(|m| m == &Monster::Dragon);
-        self.dungeon.append(roll_n(&mut self.rng, self.level));
+        let dungeon_size = self.dungeon.len() as u64;
+        self.dungeon.append(roll_n(
+            &mut self.rng,
+            (self.delve + self.level).min(10 - dungeon_size),
+        ));
         self.no_monsters = !self.has_monsters();
+        self.no_chests = !self.has_chest();
+        self.no_loot = !self.has_loot();
     }
 
     fn kill_monster(&mut self) {
@@ -69,12 +77,26 @@ impl<R: Rng> Game<R> {
     }
 
     fn execute_loot(&mut self) {
-        self.inventory.push(
-            self.treasure
-                .remove(self.rng.gen_range(0..self.treasure.len())),
-        );
+        if self.affects_all() {
+            self.dungeon.retain(|m| {
+                if m == &Monster::Chest {
+                    self.inventory.push(
+                        self.treasure
+                            .remove(self.rng.gen_range(0..self.treasure.len())),
+                    );
+                    false
+                } else {
+                    true
+                }
+            })
+        } else {
+            self.inventory.push(
+                self.treasure
+                    .remove(self.rng.gen_range(0..self.treasure.len())),
+            );
+            self.kill_monster();
+        }
 
-        self.kill_monster();
         self.kill_ally();
 
         self.run_xp += 1;
@@ -121,18 +143,25 @@ impl<R: Rng> Game<R> {
                     return true;
                 }
 
+                if self.party.is_empty() {
+                    self.phase = Phase::Monster(MonsterPhase::Defeat);
+                    return true;
+                }
+
                 self.party.set_invariants(MON_ALLY_INV.to_vec());
                 self.dungeon.set_invariants(MON_DUNGEON_INV.to_vec());
             }
             Phase::Loot(ref lp) => match lp {
                 LootPhase::SelectAlly => {
+                    if self.no_monsters
+                        && (self.no_loot || self.graveyard.is_empty() && self.no_chests)
+                    {
+                        self.phase = Phase::EmptyDungeon;
+                    }
+
                     if !self.has_loot() || self.graveyard.is_empty() && !self.has_chest() {
-                        if self.no_monsters {
-                            self.phase = Phase::EmptyDungeon;
-                        } else {
-                            self.phase = Phase::Dragon(DragonPhase::SelectAlly);
-                            return true;
-                        }
+                        self.phase = Phase::Dragon(DragonPhase::SelectAlly);
+                        return true;
                     }
 
                     self.party.set_invariants(LOOT_ALLY_INV.to_vec());
@@ -156,6 +185,11 @@ impl<R: Rng> Game<R> {
                 if self.dragon_dice() >= 3 {
                     self.party.set_invariants(DRAGON_ALLY_INV.to_vec());
                     self.party.set_selection_limit(3);
+
+                    if self.companion_count() < 3 {
+                        self.phase = Phase::Dragon(DragonPhase::Defeat);
+                        return true;
+                    }
                 } else {
                     self.phase = Phase::Regroup(RegroupPhase::Continue);
                     return true;
@@ -169,6 +203,9 @@ impl<R: Rng> Game<R> {
                 self.hero.add_xp(self.run_xp);
                 self.next_delve();
                 return true;
+            }
+            Phase::Monster(MonsterPhase::Defeat) | Phase::Dragon(DragonPhase::Defeat) => {
+                self.next_delve()
             }
             _ => (),
         }
@@ -209,6 +246,7 @@ impl<R: Rng> Game<R> {
                     Phase::Monster(MonsterPhase::SelectAlly)
                 }
                 MonsterPhase::SelectMonster => Phase::Monster(MonsterPhase::ConfirmCombat),
+                MonsterPhase::Defeat => Phase::Monster(MonsterPhase::Defeat),
             },
             Phase::Loot(ref lp) => match lp {
                 LootPhase::SelectAlly => {
@@ -226,7 +264,13 @@ impl<R: Rng> Game<R> {
                 LootPhase::ConfirmLoot | LootPhase::ConfirmGraveyard => {
                     Phase::Loot(LootPhase::SelectAlly)
                 }
-                LootPhase::SelectGraveyard => Phase::Loot(LootPhase::ConfirmGraveyard),
+                LootPhase::SelectGraveyard => {
+                    if self.graveyard.selection().is_empty() {
+                        Phase::Loot(LootPhase::SelectGraveyard)
+                    } else {
+                        Phase::Loot(LootPhase::ConfirmGraveyard)
+                    }
+                }
             },
             Phase::Dragon(DragonPhase::SelectAlly) => {
                 if self.party.selection().len() == 3 {
@@ -235,16 +279,15 @@ impl<R: Rng> Game<R> {
                     Phase::Dragon(DragonPhase::SelectAlly)
                 }
             }
-            Phase::Dragon(DragonPhase::Confirm) | Phase::EmptyDungeon => {
-                Phase::Regroup(RegroupPhase::Continue)
-            }
+            Phase::Dragon(DragonPhase::Confirm) => Phase::Victory,
+            Phase::Dragon(DragonPhase::Defeat) => Phase::Dragon(DragonPhase::Defeat),
+            Phase::EmptyDungeon => Phase::Regroup(RegroupPhase::Continue),
             Phase::Regroup(RegroupPhase::Continue | RegroupPhase::ContinueSetup) => {
                 Phase::Regroup(RegroupPhase::ContinueSetup)
             }
             Phase::Regroup(RegroupPhase::End | RegroupPhase::EndSetup) => {
                 Phase::Regroup(RegroupPhase::EndSetup)
             }
-            Phase::Defeat => Phase::Defeat,
             Phase::Victory => Phase::Victory,
         };
         while self.enter_phase_trigger() {}
@@ -253,7 +296,6 @@ impl<R: Rng> Game<R> {
     pub(super) fn prev_phase(&mut self) {
         if let Some(p) = match self.phase {
             Phase::Monster(ref mp) => match mp {
-                MonsterPhase::SelectAlly => None,
                 MonsterPhase::SelectReroll(_) | MonsterPhase::SelectMonster => {
                     Some(Phase::Monster(MonsterPhase::SelectAlly))
                 }
@@ -261,6 +303,7 @@ impl<R: Rng> Game<R> {
                     Some(Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally)))
                 }
                 MonsterPhase::ConfirmCombat => Some(Phase::Monster(MonsterPhase::SelectMonster)),
+                _ => None,
             },
             Phase::Loot(ref lp) => match lp {
                 LootPhase::SelectAlly => Some(Phase::Dragon(DragonPhase::SelectAlly)),
@@ -270,6 +313,7 @@ impl<R: Rng> Game<R> {
                 }
                 LootPhase::ConfirmGraveyard => Some(Phase::Loot(LootPhase::SelectGraveyard)),
             },
+            Phase::Dragon(DragonPhase::Defeat) => None,
             Phase::Dragon(_) => Some(Phase::Dragon(DragonPhase::SelectAlly)),
             _ => None,
         } {

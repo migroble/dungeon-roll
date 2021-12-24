@@ -6,7 +6,6 @@ pub enum Phase {
     Dragon(Dragon),
     EmptyDungeon,
     Regroup(Regroup),
-    Defeat,
     Victory,
 }
 
@@ -18,6 +17,7 @@ pub enum Monster {
     ConfirmReroll,
     SelectMonster,
     ConfirmCombat,
+    Defeat,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -40,6 +40,7 @@ pub enum Loot {
 pub enum Dragon {
     SelectAlly,
     Confirm,
+    Defeat,
 }
 
 #[derive(Debug, PartialEq, Eq)]
