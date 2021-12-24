@@ -4,7 +4,8 @@ pub enum Phase {
     Monster(Monster),
     Loot(Loot),
     Dragon(Dragon),
-    Regroup,
+    EmptyDungeon,
+    Regroup(Regroup),
     Defeat,
     Victory,
 }
@@ -39,4 +40,12 @@ pub enum Loot {
 pub enum Dragon {
     SelectAlly,
     Confirm,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Regroup {
+    Continue,
+    ContinueSetup,
+    End,
+    EndSetup,
 }

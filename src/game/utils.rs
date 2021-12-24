@@ -54,12 +54,20 @@ impl<R: Rng> Game<R> {
         }
     }
 
+    pub(super) fn companion_count(&self) -> usize {
+        self.party.iter().filter(|a| a.is_companion()).count()
+    }
+
     pub(super) fn has_monsters(&self) -> bool {
         self.dungeon.iter().any(Monster::is_monster)
     }
 
     pub(super) fn has_loot(&self) -> bool {
         self.dungeon.iter().any(Monster::is_loot)
+    }
+
+    pub(super) fn has_chest(&self) -> bool {
+        self.dungeon.iter().any(|m| m == &Monster::Chest)
     }
 
     pub(super) fn potion_count(&self) -> usize {
@@ -196,6 +204,11 @@ impl<T> Cursor<T> {
     pub fn set_value(&mut self, index: usize, value: T) {
         assert!(index < self.data.len());
         self.data[index] = value;
+    }
+
+    pub fn append(&mut self, mut values: Vec<T>) {
+        self.data.append(&mut values);
+        self.canonicalize();
     }
 
     pub fn push(&mut self, value: T) {

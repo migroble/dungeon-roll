@@ -1,6 +1,6 @@
 use super::{
     indexes_of, Ally, DragonPhase, DungeonCursor, Game, LootPhase, Monster, MonsterPhase,
-    PartyCursor, Phase, Render, Reroll, Rng, Row,
+    PartyCursor, Phase, RegroupPhase, Render, Reroll, Rng, Row,
 };
 use std::{io, iter::repeat, ops::ControlFlow};
 use tui::{
@@ -46,7 +46,7 @@ fn render_block<B: Backend>(f: &mut Frame<B>, block: Block, area: Rect) -> Rect 
 fn render_dragon<B: Backend>(f: &mut Frame<B>, area: Rect) {
     let display_area = render_block(
         f,
-        Block::default().title(" Dungeon ").borders(Borders::ALL),
+        Block::default().title(" Dragon ").borders(Borders::ALL),
         area,
     );
     let chunks = Layout::default()
@@ -58,13 +58,7 @@ fn render_dragon<B: Backend>(f: &mut Frame<B>, area: Rect) {
     f.render_widget(Paragraph::new(DRAGON), dragon_area);
 }
 
-fn render_list<B: Backend>(
-    f: &mut Frame<B>,
-    block: Block,
-    area: Rect,
-    data: Vec<&str>,
-    rows: usize,
-) {
+fn render_list<B: Backend>(f: &mut Frame<B>, block: Block, area: Rect, data: &[&str], rows: usize) {
     let text_area = render_block(f, block, area);
     let columns = (data.len() + 1) / rows;
     let column = Layout::default()
@@ -106,6 +100,111 @@ fn render_list<B: Backend>(
     });
 }
 
+fn phase_info(phase: &Phase) -> Text {
+    match phase {
+        Phase::Monster(ref mp) => {
+            let mut lines = vec![
+                Spans::from(Span::styled("Monster Phase", *TITLE_STYLE)),
+                Spans::from(""),
+            ];
+
+            let mut extra = match mp {
+                MonsterPhase::SelectAlly => vec![
+                    Spans::from(vec![
+                        Span::raw("A. Use a "),
+                        Span::styled("Scroll", Ally::Scroll.style()),
+                        Span::raw(" to re-roll dice"),
+                    ]),
+                    Spans::from("B. Use a Companion to defeat one or more Monsters"),
+                    Spans::from(""),
+                    Spans::from(""),
+                    Spans::from(vec![
+                        Span::raw("If there are three or more "),
+                        Span::styled("Dragon", Monster::Dragon.style()),
+                        Span::raw(" dice, the "),
+                        Span::styled("Dragon", Monster::Dragon.style()),
+                        Span::raw(" notice your presence and attack"),
+                    ]),
+                ],
+                MonsterPhase::SelectMonster => vec![Spans::from("Select a Monster to fight")],
+                MonsterPhase::ConfirmCombat => vec![Spans::from("Confirm the combat")],
+                MonsterPhase::SelectReroll(_) => vec![Spans::from("Select dice to re-roll")],
+                MonsterPhase::ConfirmReroll => vec![Spans::from("Confirm the re-roll")],
+            };
+
+            lines.append(&mut extra);
+            Text::from(lines)
+        }
+        Phase::Loot(ref lp) => {
+            let mut lines = vec![
+                Spans::from(Span::styled("Loot Phase", *TITLE_STYLE)),
+                Spans::from(""),
+            ];
+
+            let mut extra = match lp {
+                LootPhase::SelectAlly => vec![
+                    Spans::from(vec![
+                        Span::raw("A. Open "),
+                        Span::styled("Chests", Monster::Chest.style()),
+                    ]),
+                    Spans::from(""),
+                    Spans::from(vec![
+                        Span::raw("A. Quaff "),
+                        Span::styled("Potions", Monster::Potion.style()),
+                    ]),
+                ],
+                _ => vec![Spans::from("")],
+            };
+
+            lines.append(&mut extra);
+            Text::from(lines)
+        }
+        Phase::Dragon(_) => Text::from(vec![
+            Spans::from(Span::styled("Dragon Phase", *TITLE_STYLE)),
+            Spans::from(""),
+            Spans::from(vec![
+                Span::raw("You have awakened the "),
+                Span::styled("Dragon", Monster::Dragon.style()),
+                Span::raw(" you must select 3 Party members to defeat it"),
+            ]),
+        ]),
+        Phase::EmptyDungeon => Text::from(vec![
+            Spans::from(Span::styled("Empty Dungeon", *TITLE_STYLE)),
+            Spans::from(""),
+            Spans::from("It seems this level of the dungeon is empty"),
+            Spans::from(""),
+            Spans::from("Better to move on swiftly before anyone notices"),
+        ]),
+        Phase::Regroup(ref rp) => {
+            let mut lines = vec![
+                Spans::from(Span::styled("Regroup Phase", *TITLE_STYLE)),
+                Spans::from(""),
+            ];
+
+            let mut extra = match rp {
+                RegroupPhase::Continue => vec![
+                    Spans::from("Delve deeper into the dungeon"),
+                    Spans::from(""),
+                    Spans::from("If you die in the dungeon, you will not receive any XP"),
+                    Spans::from(""),
+                    Spans::from("Make sure you have enough Party members to keep going"),
+                ],
+                _ => vec![
+                    Spans::from("Exit the dungeon safely and live to tell the tale"),
+                    Spans::from(""),
+                    Spans::from(
+                        "You will receive extra dice based on your XP and start a new delve",
+                    ),
+                ],
+            };
+
+            lines.append(&mut extra);
+            Text::from(lines)
+        }
+        _ => Text::from(""),
+    }
+}
+
 impl<R: Rng> Game<R> {
     fn render_info<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
         let info_area = render_block(
@@ -127,84 +226,27 @@ impl<R: Rng> Game<R> {
             )
             .split(info_area);
 
-        let phase_info = match self.phase {
-            Phase::Monster(ref mp) => {
-                let mut lines = vec![
-                    Spans::from(Span::styled("Monster Phase", *TITLE_STYLE)),
-                    Spans::from(""),
-                ];
-
-                let mut extra = match mp {
-                    MonsterPhase::SelectAlly => vec![
-                        Spans::from(vec![
-                            Span::raw("A. Use a "),
-                            Span::styled("Scroll", Ally::Scroll.style()),
-                            Span::raw(" to re-roll dice"),
-                        ]),
-                        Spans::from("B. Use a Companion to defeat one or more Monsters"),
-                        Spans::from(""),
-                        Spans::from(""),
-                        Spans::from(vec![
-                            Span::raw("If there are three or more "),
-                            Span::styled("Dragon", Monster::Dragon.style()),
-                            Span::raw(" dice, the "),
-                            Span::styled("Dragon", Monster::Dragon.style()),
-                            Span::raw(" notice your presence and attack"),
-                        ]),
-                    ],
-                    MonsterPhase::SelectMonster => vec![Spans::from("Select a Monster to fight")],
-                    MonsterPhase::ConfirmCombat => vec![Spans::from("Confirm the combat")],
-                    MonsterPhase::SelectReroll(_) => vec![Spans::from("Select dice to re-roll")],
-                    MonsterPhase::ConfirmReroll => vec![Spans::from("Confirm the re-roll")],
-                };
-
-                lines.append(&mut extra);
-                Text::from(lines)
-            }
-            Phase::Loot(ref lp) => {
-                let mut lines = vec![
-                    Spans::from(Span::styled("Loot Phase", *TITLE_STYLE)),
-                    Spans::from(""),
-                ];
-
-                let mut extra = match lp {
-                    LootPhase::SelectAlly => vec![
-                        Spans::from(vec![
-                            Span::raw("A. Open "),
-                            Span::styled("Chests", Monster::Chest.style()),
-                        ]),
-                        Spans::from(""),
-                        Spans::from(vec![
-                            Span::raw("A. Quaff "),
-                            Span::styled("Potions", Monster::Potion.style()),
-                        ]),
-                    ],
-                    _ => vec![Spans::from("")],
-                };
-
-                lines.append(&mut extra);
-                Text::from(lines)
-            }
-            _ => Text::from(""),
-        };
-
         f.render_widget(
-            Paragraph::new(phase_info).wrap(Wrap { trim: true }),
+            Paragraph::new(phase_info(&self.phase)).wrap(Wrap { trim: true }),
             chunks[0],
         );
 
         let character_info = match self.selected_row() {
-            Some(Row::Dungeon) => self.current_monster().combat_info(),
-            Some(Row::Party) => self.current_ally().combat_info(),
-            Some(Row::Graveyard) => self.current_graveyard().combat_info(),
-            None => Spans::from(""),
+            Some(Row::Dungeon) if !self.dungeon.is_empty() => self.current_monster().combat_info(),
+            Some(Row::Party) if !self.party.is_empty() => self.current_ally().combat_info(),
+            Some(Row::Graveyard) if !self.graveyard.is_empty() => {
+                self.current_graveyard().combat_info()
+            }
+            _ => Spans::from(""),
         };
 
         let character_flavor = match self.selected_row() {
-            Some(Row::Dungeon) => self.current_monster().flavor_text(),
-            Some(Row::Party) => self.current_ally().flavor_text(),
-            Some(Row::Graveyard) => self.current_graveyard().flavor_text(),
-            None => Spans::from(""),
+            Some(Row::Dungeon) if !self.dungeon.is_empty() => self.current_monster().flavor_text(),
+            Some(Row::Party) if !self.party.is_empty() => self.current_ally().flavor_text(),
+            Some(Row::Graveyard) if !self.graveyard.is_empty() => {
+                self.current_graveyard().flavor_text()
+            }
+            _ => Spans::from(""),
         };
 
         f.render_widget(
@@ -253,12 +295,22 @@ impl<R: Rng> Game<R> {
             Phase::Dragon(DragonPhase::Confirm) => {
                 controls.append(&mut vec!["Enter: Confirm", "Esc: Back"]);
             }
-            Phase::Regroup => (),
-            _ => unreachable!(),
+            Phase::EmptyDungeon => controls = vec!["Enter: Continue"],
+            Phase::Regroup(RegroupPhase::Continue) => {
+                controls = vec!["↓: End delve", "Enter: Confirm"];
+            }
+            Phase::Regroup(RegroupPhase::End) => controls = vec!["↑: Keep going", "Enter: Confirm"],
+            _ => controls = Vec::new(),
         }
         controls.push("Q: Exit");
 
-        render_list(f, Block::default().borders(Borders::ALL), area, controls, 2);
+        render_list(
+            f,
+            Block::default().borders(Borders::ALL),
+            area,
+            &controls,
+            2,
+        );
     }
 
     fn render_array<B: Backend, T: Render>(
@@ -266,7 +318,7 @@ impl<R: Rng> Game<R> {
         f: &mut Frame<B>,
         area: Rect,
         row: Row,
-        name: &'static str,
+        name: &str,
         data: &[T],
         style_fn: fn(&Game<R>, usize) -> Style,
     ) {
@@ -323,12 +375,65 @@ impl<R: Rng> Game<R> {
 
         match self.phase {
             Phase::Dragon(_) => render_dragon(f, chunks[0]),
-            Phase::Regroup => (),
+            Phase::Regroup(ref rp) => {
+                let style_top = Style::default();
+                let style_bottom = Style::default();
+                let (style_top, style_bottom) = match rp {
+                    RegroupPhase::Continue => {
+                        (style_top.add_modifier(Modifier::REVERSED), style_bottom)
+                    }
+                    RegroupPhase::End => (style_top, style_bottom.add_modifier(Modifier::REVERSED)),
+                    _ => (style_top, style_bottom),
+                };
+
+                let question_area = render_block(
+                    f,
+                    Block::default()
+                        .title(" What will you do? ")
+                        .border_type(BorderType::Thick)
+                        .borders(Borders::ALL),
+                    chunks[0],
+                );
+
+                let subchunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(
+                        [
+                            Constraint::Ratio(2, 6),
+                            Constraint::Ratio(1, 6),
+                            Constraint::Ratio(1, 6),
+                            Constraint::Ratio(2, 6),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(question_area);
+                f.render_widget(
+                    Paragraph::new("Stuff of Legend")
+                        .style(style_top)
+                        .alignment(Alignment::Center),
+                    subchunks[1],
+                );
+                f.render_widget(
+                    Paragraph::new("Retire to the Tavern")
+                        .style(style_bottom)
+                        .alignment(Alignment::Center),
+                    subchunks[2],
+                );
+            }
+            Phase::EmptyDungeon => {
+                render_block(
+                    f,
+                    Block::default()
+                        .title(format!(" Dungeon #{} lvl. {} ", self.delve, self.level))
+                        .borders(Borders::ALL),
+                    chunks[0],
+                );
+            }
             _ => self.render_array(
                 f,
                 chunks[0],
                 Row::Dungeon,
-                " Dungeon ",
+                &format!(" Dungeon #{} lvl. {} ", self.delve, self.level),
                 &*self.dungeon,
                 S::dungeon_style,
             ),
@@ -354,11 +459,13 @@ impl<R: Rng> Game<R> {
             f,
             Block::default().title(" Inventory ").borders(Borders::ALL),
             subchunks[1],
-            vec![
-                &format!("XP: {}", self.hero.xp()),
+            &[
+                &format!("XP: {}", self.run_xp),
                 &format!("Loot: {}", self.inventory.len()),
+                &format!("Total XP: {}", self.hero.xp()),
+                &format!("Party size: {}", self.party_size),
             ],
-            1,
+            2,
         );
     }
 
@@ -393,6 +500,9 @@ impl<R: Rng> Game<R> {
                 Phase::Monster(_) => self.render_playfield::<_, MPStyler>(f, playfield),
                 Phase::Loot(_) => self.render_playfield::<_, LPStyler>(f, playfield),
                 Phase::Dragon(_) => self.render_playfield::<_, DPStyler>(f, playfield),
+                Phase::Regroup(_) | Phase::EmptyDungeon => {
+                    self.render_playfield::<_, GenericStyler>(f, playfield)
+                }
                 _ => (),
             };
 
@@ -573,3 +683,6 @@ impl Styler for DPStyler {
         }
     }
 }
+
+struct GenericStyler;
+impl Styler for GenericStyler {}

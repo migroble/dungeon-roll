@@ -1,7 +1,10 @@
 use crate::{
     dice::{Ally, Dice, Monster, Render},
     hero::{Hero, Type},
-    phase::{Dragon as DragonPhase, Loot as LootPhase, Monster as MonsterPhase, Phase, Reroll},
+    phase::{
+        Dragon as DragonPhase, Loot as LootPhase, Monster as MonsterPhase, Phase,
+        Regroup as RegroupPhase, Reroll,
+    },
     treasure::{Treasure, TREASURE},
 };
 use rand::prelude::*;
@@ -56,6 +59,9 @@ pub struct Game<R: Rng> {
     blink: bool,
     delve: u64,
     level: u64,
+    run_xp: u64,
+    party_size: u64,
+    no_monsters: bool,
     phase: Phase,
     hero: Hero,
     party: Cursor<Ally>,
@@ -71,7 +77,10 @@ impl<R: Rng> Game<R> {
             rng,
             blink: true,
             delve: 0,
-            level: 5,
+            level: 0,
+            run_xp: 0,
+            no_monsters: false,
+            party_size: 0,
             phase: Phase::Setup,
             hero: Hero::new(hero),
             party: Cursor::new(Vec::new(), MON_ALLY_INV.to_vec()),

@@ -1,5 +1,6 @@
 use super::{
-    DragonPhase, DungeonCursor, Game, LootPhase, MonsterPhase, PartyCursor, Phase, Reroll, Rng,
+    DragonPhase, DungeonCursor, Game, LootPhase, MonsterPhase, PartyCursor, Phase, RegroupPhase,
+    Reroll, Rng,
 };
 use crossterm::event::{Event, KeyCode};
 
@@ -12,18 +13,19 @@ impl<R: Rng> Game<R> {
                 (KeyCode::Enter, _) => self.next_phase(),
                 (KeyCode::Esc, _) => self.prev_phase(),
                 (KeyCode::Char('q'), _) => return true,
+                (KeyCode::Char(' '), _) => self.toggle_select(),
                 (KeyCode::Up, Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally))) => {
                     self.select_top();
                 }
                 (KeyCode::Down, Phase::Monster(MonsterPhase::SelectReroll(Reroll::Monster))) => {
                     self.select_bottom();
                 }
-                (
-                    KeyCode::Char(' '),
-                    Phase::Monster(MonsterPhase::SelectReroll(_))
-                    | Phase::Loot(LootPhase::SelectGraveyard)
-                    | Phase::Dragon(DragonPhase::SelectAlly),
-                ) => self.toggle_select(),
+                (KeyCode::Up, Phase::Regroup(RegroupPhase::End)) => {
+                    self.select_continue();
+                }
+                (KeyCode::Down, Phase::Regroup(RegroupPhase::Continue)) => {
+                    self.select_end();
+                }
                 _ => return false,
             }
         }
@@ -91,5 +93,13 @@ impl<R: Rng> Game<R> {
 
     fn select_bottom(&mut self) {
         self.phase = Phase::Monster(MonsterPhase::SelectReroll(Reroll::Ally));
+    }
+
+    fn select_continue(&mut self) {
+        self.phase = Phase::Regroup(RegroupPhase::Continue);
+    }
+
+    fn select_end(&mut self) {
+        self.phase = Phase::Regroup(RegroupPhase::End);
     }
 }

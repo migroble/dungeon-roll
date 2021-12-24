@@ -55,10 +55,9 @@ impl Render for Ally {
     fn symbol(&self) -> &'static str {
         match self {
             Ally::Fighter => "F",
-            Ally::Cleric => "C",
+            Ally::Cleric | Ally::Champion => "C",
             Ally::Mage => "M",
             Ally::Thief => "T",
-            Ally::Champion => "C",
             Ally::Scroll => "S",
         }
     }
