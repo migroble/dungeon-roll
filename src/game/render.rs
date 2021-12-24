@@ -513,6 +513,27 @@ impl<R: Rng> Game<R> {
 
             let game = render_block(f, Block::default().borders(Borders::ALL), f.size());
 
+            if self.phase == Phase::Victory {
+                f.render_widget(
+                    Paragraph::new(Text::from(vec![
+                        Spans::from(Span::styled(
+                            "Victory!",
+                            Style::default().add_modifier(Modifier::RAPID_BLINK | Modifier::BOLD),
+                        )),
+                        Spans::from(""),
+                        Spans::from(Span::styled(
+                            "Your prize is under Miky's bed",
+                            Style::default()
+                                .fg(Color::DarkGray)
+                                .add_modifier(Modifier::DIM),
+                        )),
+                    ]))
+                    .alignment(Alignment::Center),
+                    vertical_center(game, 3),
+                );
+                return;
+            }
+
             let layout = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
@@ -629,9 +650,12 @@ struct LPStyler;
 impl Styler for LPStyler {
     fn dungeon_style<R: Rng>(game: &Game<R>, i: usize) -> Style {
         let cursor = game.dungeon.cursor(DungeonCursor::Monster as usize);
+
         let mut equal_monsters = indexes_of(&game.dungeon, game.current_monster());
-        equal_monsters.retain(|i| *i != cursor);
-        equal_monsters.truncate(game.graveyard.selection().len().saturating_sub(1));
+        if game.current_monster() == &Monster::Potion {
+            equal_monsters.retain(|i| *i != cursor);
+            equal_monsters.truncate(game.graveyard.selection().len().saturating_sub(1));
+        }
 
         let is_selected = |i: usize| i == cursor;
         let is_affected =

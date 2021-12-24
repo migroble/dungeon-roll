@@ -12,9 +12,8 @@ impl<R: Rng> Game<R> {
         self.delve += 1;
         self.level = 0;
         self.run_xp = 0;
-        self.no_monsters = false;
-        self.no_chests = false;
-        self.no_loot = false;
+        self.loot_count = 0;
+        self.combat_count = 0;
         self.party_size = ((1. + 1.5 * (self.hero.xp() as f64 + 4.).sqrt()) as u64).min(7);
         self.phase = Phase::Setup;
         self.party.set_data(roll_n(&mut self.rng, self.party_size));
@@ -33,9 +32,6 @@ impl<R: Rng> Game<R> {
             &mut self.rng,
             (self.delve + self.level).min(10 - dungeon_size),
         ));
-        self.no_monsters = !self.has_monsters();
-        self.no_chests = !self.has_chest();
-        self.no_loot = !self.has_loot();
     }
 
     fn kill_monster(&mut self) {
@@ -148,22 +144,22 @@ impl<R: Rng> Game<R> {
                     return true;
                 }
 
+                self.combat_count += 1;
                 self.party.set_invariants(MON_ALLY_INV.to_vec());
                 self.dungeon.set_invariants(MON_DUNGEON_INV.to_vec());
             }
             Phase::Loot(ref lp) => match lp {
                 LootPhase::SelectAlly => {
-                    if self.no_monsters
-                        && (self.no_loot || self.graveyard.is_empty() && self.no_chests)
-                    {
-                        self.phase = Phase::EmptyDungeon;
-                    }
-
                     if !self.has_loot() || self.graveyard.is_empty() && !self.has_chest() {
-                        self.phase = Phase::Dragon(DragonPhase::SelectAlly);
-                        return true;
+                        if self.combat_count == 0 && self.loot_count == 0 {
+                            self.phase = Phase::EmptyDungeon;
+                        } else {
+                            self.phase = Phase::Dragon(DragonPhase::SelectAlly);
+                            return true;
+                        }
                     }
 
+                    self.loot_count += 1;
                     self.party.set_invariants(LOOT_ALLY_INV.to_vec());
                 }
                 LootPhase::SelectLoot => {
