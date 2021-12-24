@@ -3,10 +3,9 @@ use super::{
     PartyCursor, Phase, Render, Reroll, Rng, Row,
 };
 use std::{io, iter::repeat, ops::ControlFlow};
-use tui::layout::Rect;
 use tui::{
     backend::Backend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     terminal::{CompletedFrame, Frame},
     text::{Span, Spans, Text},
@@ -120,8 +119,7 @@ impl<R: Rng> Game<R> {
             .horizontal_margin(2)
             .constraints(
                 [
-                    Constraint::Ratio(1, 4),
-                    Constraint::Ratio(1, 4),
+                    Constraint::Ratio(1, 2),
                     Constraint::Ratio(1, 4),
                     Constraint::Ratio(1, 4),
                 ]
@@ -143,8 +141,16 @@ impl<R: Rng> Game<R> {
                             Span::styled("Scroll", Ally::Scroll.style()),
                             Span::raw(" to re-roll dice"),
                         ]),
-                        Spans::from(""),
                         Spans::from("B. Use a Companion to defeat one or more Monsters"),
+                        Spans::from(""),
+                        Spans::from(""),
+                        Spans::from(vec![
+                            Span::raw("If there are three or more "),
+                            Span::styled("Dragon", Monster::Dragon.style()),
+                            Span::raw(" dice, the "),
+                            Span::styled("Dragon", Monster::Dragon.style()),
+                            Span::raw(" notice your presence and attack"),
+                        ]),
                     ],
                     MonsterPhase::SelectMonster => vec![Spans::from("Select a Monster to fight")],
                     MonsterPhase::ConfirmCombat => vec![Spans::from("Confirm the combat")],
@@ -187,18 +193,6 @@ impl<R: Rng> Game<R> {
             chunks[0],
         );
 
-        f.render_widget(
-            Paragraph::new(Spans::from(vec![
-                Span::raw("If there are three or more "),
-                Span::styled("Dragon", Monster::Dragon.style()),
-                Span::raw(" dice, the "),
-                Span::styled("Dragon", Monster::Dragon.style()),
-                Span::raw(" notice your presence and attack"),
-            ]))
-            .wrap(Wrap { trim: true }),
-            vertical_center(chunks[1], 2),
-        );
-
         let character_info = match self.selected_row() {
             Some(Row::Dungeon) => self.current_monster().combat_info(),
             Some(Row::Party) => self.current_ally().combat_info(),
@@ -215,12 +209,12 @@ impl<R: Rng> Game<R> {
 
         f.render_widget(
             Paragraph::new(character_info).wrap(Wrap { trim: true }),
-            vertical_center(chunks[2], 0),
+            vertical_center(chunks[1], 0),
         );
 
         f.render_widget(
             Paragraph::new(character_flavor).wrap(Wrap { trim: true }),
-            vertical_center(chunks[3], 0),
+            vertical_center(chunks[2], 0),
         );
     }
 
